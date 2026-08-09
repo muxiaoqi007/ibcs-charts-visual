@@ -1,0 +1,64 @@
+.ibcs-visual {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    background: #ffffff;
+    color: #111111;
+    font-family: "Segoe UI", Arial, sans-serif;
+    user-select: none;
+
+    text {
+        fill: #111111;
+    }
+
+    .ibcs-title {
+        font-weight: 600;
+    }
+
+    .ibcs-panel-label,
+    .ibcs-category-label,
+    .ibcs-axis-label {
+        font-weight: 400;
+    }
+
+    .ibcs-value-label {
+        font-weight: 500;
+        paint-order: stroke;
+        stroke: #ffffff;
+        stroke-width: 2.5px;
+        stroke-linejoin: round;
+    }
+
+    .ibcs-relative-label {
+        font-style: italic;
+    }
+
+    .ibcs-category-mark {
+        cursor: pointer;
+        transition: opacity 120ms ease-out;
+
+        &:focus {
+            outline: none;
+
+            .ibcs-bar,
+            circle,
+            line {
+                filter: drop-shadow(0 0 2px #0067c0);
+            }
+        }
+    }
+
+    .ibcs-bar {
+        shape-rendering: crispEdges;
+    }
+
+    .ibcs-baseline {
+        shape-rendering: crispEdges;
+    }
+
+    .ibcs-empty-message {
+        fill: #666666;
+        font-size: 13px;
+    }
+}

@@ -1,0 +1,175 @@
+{
+  "dataRoles": [
+    {
+      "displayName": "Category",
+      "name": "category",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Actual",
+      "name": "actual",
+      "kind": "Measure"
+    },
+    {
+      "displayName": "Previous year / Plan",
+      "name": "comparison",
+      "kind": "Measure"
+    },
+    {
+      "displayName": "Tooltips",
+      "description": "Additional measures shown when hovering over a category.",
+      "name": "Tooltips",
+      "kind": "Measure"
+    }
+  ],
+  "dataViewMappings": [
+    {
+      "conditions": [
+        {
+          "category": { "max": 1 },
+          "actual": { "max": 1 },
+          "comparison": { "max": 1 }
+        }
+      ],
+      "categorical": {
+        "categories": {
+          "for": { "in": "category" },
+          "dataReductionAlgorithm": { "top": { "count": 250 } }
+        },
+        "values": {
+          "select": [
+            { "bind": { "to": "actual" } },
+            { "bind": { "to": "comparison" } },
+            { "for": { "in": "Tooltips" } }
+          ]
+        }
+      }
+    }
+  ],
+  "objects": {
+    "chartSettings": {
+      "displayName": "Chart settings",
+      "properties": {
+        "layout": {
+          "displayName": "Layout",
+          "type": {
+            "enumeration": [
+              { "displayName": "Responsive", "value": "responsive" },
+              { "displayName": "Integrated variance", "value": "integratedVariance" },
+              { "displayName": "Absolute variance", "value": "absolute" },
+              { "displayName": "Relative variance", "value": "relative" },
+              { "displayName": "Absolute / Relative", "value": "absoluteRelative" },
+              { "displayName": "Actual / Absolute", "value": "actualAbsolute" },
+              { "displayName": "Actual / Relative", "value": "actualRelative" },
+              { "displayName": "Actual", "value": "actual" }
+            ]
+          }
+        },
+        "invertVarianceColors": {
+          "displayName": "Invert variance colors",
+          "type": { "bool": true }
+        },
+        "treatNullsAsZeros": {
+          "displayName": "Treat nulls as zeros",
+          "type": { "bool": true }
+        },
+        "grandTotal": {
+          "displayName": "Grand total",
+          "type": { "bool": true }
+        },
+        "showVerticalAxis": {
+          "displayName": "Show vertical axis",
+          "type": { "bool": true }
+        }
+      }
+    },
+    "colors": {
+      "displayName": "Colors",
+      "properties": {
+        "actualColor": {
+          "displayName": "Actual",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "comparisonColor": {
+          "displayName": "Previous year / Plan",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "positiveColor": {
+          "displayName": "Favorable variance",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "negativeColor": {
+          "displayName": "Unfavorable variance",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "baselineColor": {
+          "displayName": "Baseline",
+          "type": { "fill": { "solid": { "color": true } } }
+        }
+      }
+    },
+    "dataLabels": {
+      "displayName": "Data labels",
+      "properties": {
+        "show": {
+          "displayName": "Show",
+          "type": { "bool": true }
+        },
+        "fontSize": {
+          "displayName": "Value text size",
+          "type": { "formatting": { "fontSize": true } }
+        },
+        "categoryFontSize": {
+          "displayName": "Category text size",
+          "type": { "formatting": { "fontSize": true } }
+        },
+        "decimalPlaces": {
+          "displayName": "Decimal places",
+          "type": { "integer": true }
+        },
+        "displayUnits": {
+          "displayName": "Display units",
+          "type": {
+            "enumeration": [
+              { "displayName": "Auto", "value": "auto" },
+              { "displayName": "None", "value": "none" },
+              { "displayName": "Thousands", "value": "thousands" },
+              { "displayName": "Millions", "value": "millions" },
+              { "displayName": "Billions", "value": "billions" },
+              { "displayName": "Trillions", "value": "trillions" }
+            ]
+          }
+        }
+      }
+    },
+    "title": {
+      "displayName": "Title",
+      "properties": {
+        "show": {
+          "displayName": "Show",
+          "type": { "bool": true }
+        },
+        "text": {
+          "displayName": "Text",
+          "type": { "text": true }
+        },
+        "fontSize": {
+          "displayName": "Text size",
+          "type": { "formatting": { "fontSize": true } }
+        }
+      }
+    }
+  },
+  "sorting": { "default": {} },
+  "tooltips": {
+    "supportedTypes": { "default": true, "canvas": true },
+    "roles": ["Tooltips"],
+    "supportEnhancedTooltips": true
+  },
+  "suppressDefaultTitle": true,
+  "supportsKeyboardFocus": true,
+  "supportsEmptyDataView": true,
+  "supportsMultiVisualSelection": true,
+  "supportsHighlight": true,
+  "privileges": []
+}

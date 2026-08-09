@@ -1,0 +1,8 @@
+node_modules/
+.tmp/
+dist/
+webpack.statistics.*.html
+.DS_Store
+*.log
+docs/plans/
+
