@@ -29,6 +29,8 @@ Download the latest `.pbiviz` from [GitHub Releases](https://github.com/muxiaoqi
 
 Responsive mode considers the visual's width, height, and category density. Spacious visuals show Actual, absolute variance, and relative variance as aligned panels; medium visuals keep Actual and absolute variance; compact or dense visuals fold variance indicators into the Actual panel. Titles, axes, value labels, and category labels are progressively fitted or reduced to avoid clipping. If no comparison measure is supplied, the visual automatically falls back to Actual.
 
+Scenario labels automatically recognize common Previous Year (PY), Plan (PL), and Forecast (FC) field names and can be overridden in the formatting pane. The Column design card controls the widths of overlapping Actual/Comparison columns and compact integrated Actual/variance columns. Value labels are measured after rendering and lower-priority labels are removed when they collide.
+
 ## Semantics
 
 - Absolute variance: `Actual - Comparison`

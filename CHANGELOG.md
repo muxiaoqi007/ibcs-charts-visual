@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0.0 — 2026-08-11
+
+- Added automatic and configurable AC/PY/PL/FC scenario abbreviations.
+- Added formatting controls for overlapping and integrated column widths.
+- Added measured SVG label collision handling with semantic label priorities.
+- Added regression coverage for responsive column and tiny-variance geometry.
+
 ## 1.2.0.0 — 2026-08-11
 
 - Made Responsive layout react to width, height, and category density.

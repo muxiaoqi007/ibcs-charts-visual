@@ -112,6 +112,65 @@ class ColorsCard extends FormattingSettingsCard {
     ];
 }
 
+class ScenarioLabelsCard extends FormattingSettingsCard {
+    actualLabel = new formattingSettings.TextInput({
+        name: "actualLabel",
+        displayName: "Actual label",
+        value: "AC",
+        placeholder: "AC"
+    });
+
+    comparisonLabel = new formattingSettings.TextInput({
+        name: "comparisonLabel",
+        displayName: "Comparison label",
+        value: "",
+        placeholder: "Auto"
+    });
+
+    name = "scenarioLabels";
+    displayName = "Scenario labels";
+    slices: FormattingSettingsSlice[] = [this.actualLabel, this.comparisonLabel];
+}
+
+class ColumnDesignCard extends FormattingSettingsCard {
+    overlapActualPercent = new formattingSettings.NumUpDown({
+        name: "overlapActualPercent",
+        displayName: "Overlap actual width %",
+        value: 23,
+        options: { minValue: { value: 5, type: powerbi.visuals.ValidatorType.Min }, maxValue: { value: 100, type: powerbi.visuals.ValidatorType.Max } }
+    });
+
+    overlapComparisonPercent = new formattingSettings.NumUpDown({
+        name: "overlapComparisonPercent",
+        displayName: "Overlap comparison width %",
+        value: 30,
+        options: { minValue: { value: 5, type: powerbi.visuals.ValidatorType.Min }, maxValue: { value: 100, type: powerbi.visuals.ValidatorType.Max } }
+    });
+
+    integratedActualPercent = new formattingSettings.NumUpDown({
+        name: "integratedActualPercent",
+        displayName: "Integrated actual width %",
+        value: 80,
+        options: { minValue: { value: 10, type: powerbi.visuals.ValidatorType.Min }, maxValue: { value: 100, type: powerbi.visuals.ValidatorType.Max } }
+    });
+
+    integratedVariancePercent = new formattingSettings.NumUpDown({
+        name: "integratedVariancePercent",
+        displayName: "Integrated variance width %",
+        value: 70,
+        options: { minValue: { value: 10, type: powerbi.visuals.ValidatorType.Min }, maxValue: { value: 100, type: powerbi.visuals.ValidatorType.Max } }
+    });
+
+    name = "columnDesign";
+    displayName = "Column design";
+    slices: FormattingSettingsSlice[] = [
+        this.overlapActualPercent,
+        this.overlapComparisonPercent,
+        this.integratedActualPercent,
+        this.integratedVariancePercent
+    ];
+}
+
 class DataLabelsCard extends FormattingSettingsCard {
     show = new formattingSettings.ToggleSwitch({
         name: "show",
@@ -180,9 +239,11 @@ class TitleCard extends FormattingSettingsCard {
 
 export class VisualFormattingSettingsModel extends FormattingSettingsModel {
     chartSettings = new ChartSettingsCard();
+    scenarioLabels = new ScenarioLabelsCard();
+    columnDesign = new ColumnDesignCard();
     colors = new ColorsCard();
     dataLabels = new DataLabelsCard();
     title = new TitleCard();
 
-    cards = [this.chartSettings, this.colors, this.dataLabels, this.title];
+    cards = [this.chartSettings, this.scenarioLabels, this.columnDesign, this.colors, this.dataLabels, this.title];
 }

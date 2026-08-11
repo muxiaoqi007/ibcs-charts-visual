@@ -3,7 +3,17 @@
 import powerbi from "powerbi-visuals-api";
 import ISelectionId = powerbi.visuals.ISelectionId;
 import ITooltipService = powerbi.extensibility.ITooltipService;
-import { DisplayUnit, DisplayUnitsMode, isFavorable, ResolvedLayout, resolveDisplayUnit, VariancePoint } from "./model";
+import {
+    DisplayUnit,
+    DisplayUnitsMode,
+    canShowIntegratedVarianceLabel,
+    isFavorable,
+    ResolvedLayout,
+    resolveColumnWidths,
+    resolveDisplayUnit,
+    resolveIntegratedVarianceGeometry,
+    VariancePoint
+} from "./model";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -44,6 +54,10 @@ export interface RenderSettings {
     positiveColor: string;
     negativeColor: string;
     baselineColor: string;
+    overlapActualPercent: number;
+    overlapComparisonPercent: number;
+    integratedActualPercent: number;
+    integratedVariancePercent: number;
 }
 
 interface RenderOptions {
@@ -54,6 +68,8 @@ interface RenderOptions {
     responsive: boolean;
     actualName: string;
     comparisonName: string;
+    actualLabel: string;
+    comparisonLabel: string;
     title: string;
     settings: RenderSettings;
     selectedIds: ISelectionId[];
@@ -170,6 +186,7 @@ export class IBCSRenderer {
             }
         });
 
+        this.resolveValueLabelCollisions();
         this.updateSelection(options.selectedIds);
     }
 
@@ -243,12 +260,13 @@ export class IBCSRenderer {
         const scale = this.linearScale(min, max, rangeMin, rangeMax);
         const zeroY = scale(0);
         const step = box.width / options.points.length;
-        const comparisonWidth = Math.min(80, Math.max(3, step * 0.74));
-        const actualWidth = Math.min(60, Math.max(2, step * 0.55));
+        const widths = resolveColumnWidths(step, options.settings);
+        const comparisonWidth = widths.overlapComparison;
+        const actualWidth = widths.overlapActual;
 
         this.drawBaseline(box.x, box.x + box.width, zeroY, options.settings.baselineColor, 1.5);
         if (options.profile.showPanelLabels) {
-            this.drawPanelLabel("PY\nAC", box, options.settings.valueFontSize);
+            this.drawPanelLabel(`${options.comparisonLabel}\n${options.actualLabel}`, box, options.settings.valueFontSize);
         }
         this.drawVerticalAxis(options, box, min, max, scale);
 
@@ -261,13 +279,31 @@ export class IBCSRenderer {
                 const comparisonY = scale(point.comparison);
                 const actualY = point.actual === null ? null : scale(point.actual);
                 if (options.settings.showDataLabels && step >= 46 && actualY === null) {
-                    this.drawValueLabel(group, centerX, comparisonY, zeroY, this.formatNumber(point.comparison, options.settings.decimalPlaces), options.settings.valueFontSize);
+                    this.drawValueLabel(
+                        group,
+                        centerX,
+                        comparisonY,
+                        zeroY,
+                        this.formatNumber(point.comparison, options.settings.decimalPlaces),
+                        options.settings.valueFontSize,
+                        false,
+                        1
+                    );
                 }
             }
             if (point.actual !== null) {
                 this.drawBar(group, centerX - actualWidth / 2, zeroY, scale(point.actual), actualWidth, options.settings.actualColor, "actual");
                 if (options.settings.showDataLabels && step >= 24) {
-                    this.drawValueLabel(group, centerX, scale(point.actual), zeroY, this.formatNumber(point.actual, options.settings.decimalPlaces), options.settings.valueFontSize);
+                    this.drawValueLabel(
+                        group,
+                        centerX,
+                        scale(point.actual),
+                        zeroY,
+                        this.formatNumber(point.actual, options.settings.decimalPlaces),
+                        options.settings.valueFontSize,
+                        false,
+                        4
+                    );
                 }
             }
             if (index === options.points.length - 1 && point.absoluteVariance !== null && point.actual !== null && point.comparison !== null && step >= 18) {
@@ -291,7 +327,8 @@ export class IBCSRenderer {
                         x: box.x + box.width - 3,
                         y: (actualY + comparisonY) / 2 + options.settings.valueFontSize / 3,
                         "text-anchor": "end",
-                        "font-size": options.settings.valueFontSize
+                        "font-size": options.settings.valueFontSize,
+                        "data-label-priority": 2
                     });
                     varianceLabel.textContent = this.formatPercent(point.relativeVariance, options.settings.decimalPlaces);
                     group.appendChild(varianceLabel);
@@ -309,12 +346,18 @@ export class IBCSRenderer {
         const scale = this.linearScale(min, max, rangeMin, rangeMax);
         const zeroY = scale(0);
         const step = box.width / options.points.length;
-        const actualWidth = Math.min(220, Math.max(8, step * 0.80));
-        const varianceWidth = actualWidth * 0.70;
+        const widths = resolveColumnWidths(step, options.settings);
+        const actualWidth = widths.integratedActual;
+        const varianceWidth = widths.integratedVariance;
 
         this.drawBaseline(box.x, box.x + box.width, zeroY, options.settings.baselineColor, 1.5);
         if (options.profile.showPanelLabels) {
-            this.drawIntegratedPanelLabels(box, options.settings.valueFontSize);
+            this.drawIntegratedPanelLabels(
+                box,
+                options.settings.valueFontSize,
+                options.actualLabel,
+                options.comparisonLabel
+            );
         }
         this.drawVerticalAxis(options, box, min, max, scale);
 
@@ -332,28 +375,27 @@ export class IBCSRenderer {
 
             if (point.absoluteVariance !== null && actualY !== null && comparisonY !== null) {
                 const color = this.varianceColor(point.absoluteVariance, options.settings);
-                const varianceTop = Math.min(actualY, comparisonY);
-                const varianceHeight = Math.max(3, Math.abs(actualY - comparisonY));
+                const varianceGeometry = resolveIntegratedVarianceGeometry(actualY, comparisonY);
                 const overlay = this.createElement("rect", {
                     class: "ibcs-bar ibcs-integrated-variance",
                     x: centerX + actualWidth / 2 - varianceWidth,
-                    y: varianceTop,
+                    y: varianceGeometry.top,
                     width: varianceWidth,
-                    height: varianceHeight,
+                    height: varianceGeometry.height,
                     fill: color
                 });
                 group.appendChild(overlay);
 
                 const showVarianceLabel = options.settings.showDataLabels
-                    && step >= 58
-                    && varianceHeight >= options.settings.valueFontSize + 5;
+                    && canShowIntegratedVarianceLabel(step, varianceGeometry.height, options.settings.valueFontSize);
                 if (showVarianceLabel) {
                     const varianceLabel = this.createElement("text", {
                         class: "ibcs-value-label ibcs-integrated-variance-label",
                         x: centerX + actualWidth / 2 - varianceWidth / 2,
-                        y: varianceTop - 5,
+                        y: varianceGeometry.top - 5,
                         "text-anchor": "middle",
-                        "font-size": options.settings.valueFontSize
+                        "font-size": options.settings.valueFontSize,
+                        "data-label-priority": 3
                     });
                     varianceLabel.textContent = this.formatSigned(point.absoluteVariance, options.settings.decimalPlaces);
                     group.appendChild(varianceLabel);
@@ -383,7 +425,8 @@ export class IBCSRenderer {
                         x: centerX,
                         y: (zeroY + displayedY) / 2 + options.settings.valueFontSize / 3,
                         "text-anchor": "middle",
-                        "font-size": options.settings.valueFontSize
+                        "font-size": options.settings.valueFontSize,
+                        "data-label-priority": 4
                     });
                     label.textContent = this.formatNumber(displayedValue, options.settings.decimalPlaces);
                     group.appendChild(label);
@@ -397,7 +440,9 @@ export class IBCSRenderer {
                         labelY,
                         zeroY,
                         this.formatNumber(displayedValue, options.settings.decimalPlaces),
-                        options.settings.valueFontSize
+                        options.settings.valueFontSize,
+                        false,
+                        4
                     );
                 }
             }
@@ -439,13 +484,19 @@ export class IBCSRenderer {
             x: arrowX + 7,
             y: (actualY + comparisonY) / 2 + settings.valueFontSize / 3,
             "text-anchor": "start",
-            "font-size": settings.valueFontSize
+            "font-size": settings.valueFontSize,
+            "data-label-priority": 2
         });
         percentLabel.textContent = label;
         group.append(line, arrow, percentLabel);
     }
 
-    private drawIntegratedPanelLabels(box: PanelBox, fontSize: number): void {
+    private drawIntegratedPanelLabels(
+        box: PanelBox,
+        fontSize: number,
+        actualLabelText: string,
+        comparisonLabelText: string
+    ): void {
         const x = box.x - 10;
         const varianceLabel = this.createElement("text", {
             class: "ibcs-panel-label",
@@ -454,7 +505,7 @@ export class IBCSRenderer {
             "text-anchor": "end",
             "font-size": Math.max(10, fontSize)
         });
-        varianceLabel.textContent = "ΔPY";
+        varianceLabel.textContent = `Δ${comparisonLabelText}`;
         const actualLabel = this.createElement("text", {
             class: "ibcs-panel-label",
             x,
@@ -462,7 +513,7 @@ export class IBCSRenderer {
             "text-anchor": "end",
             "font-size": Math.max(10, fontSize)
         });
-        actualLabel.textContent = "AC";
+        actualLabel.textContent = actualLabelText;
         this.svg.append(varianceLabel, actualLabel);
     }
 
@@ -480,7 +531,11 @@ export class IBCSRenderer {
 
         this.drawBaseline(box.x, box.x + box.width, zeroY, options.settings.baselineColor, 3);
         if (options.profile.showPanelLabels) {
-            this.drawPanelLabel(relative ? "ΔPY%" : "ΔPY", box, options.settings.valueFontSize);
+            this.drawPanelLabel(
+                relative ? `Δ${options.comparisonLabel}%` : `Δ${options.comparisonLabel}`,
+                box,
+                options.settings.valueFontSize
+            );
         }
         this.drawVerticalAxis(options, box, min, max, scale, relative);
 
@@ -513,7 +568,16 @@ export class IBCSRenderer {
                 const label = relative
                     ? this.formatPercent(value, options.settings.decimalPlaces)
                     : this.formatSigned(value, options.settings.decimalPlaces);
-                this.drawValueLabel(group, centerX, valueY, zeroY, label, options.settings.valueFontSize, relative);
+                this.drawValueLabel(
+                    group,
+                    centerX,
+                    valueY,
+                    zeroY,
+                    label,
+                    options.settings.valueFontSize,
+                    relative,
+                    relative ? 2 : 3
+                );
             }
             this.svg.appendChild(group);
         });
@@ -677,7 +741,8 @@ export class IBCSRenderer {
         zeroY: number,
         value: string,
         fontSize: number,
-        italic = false
+        italic = false,
+        priority = 3
     ): void {
         const positive = valueY <= zeroY;
         const label = this.createElement("text", {
@@ -685,10 +750,64 @@ export class IBCSRenderer {
             x,
             y: positive ? valueY - 5 : valueY + fontSize + 2,
             "text-anchor": "middle",
-            "font-size": fontSize
+            "font-size": fontSize,
+            "data-label-priority": priority
         });
         label.textContent = value;
         group.appendChild(label);
+    }
+
+    private resolveValueLabelCollisions(): void {
+        const labels = Array.from(this.svg.querySelectorAll<SVGTextElement>(".ibcs-value-label"));
+        const candidates = labels.map((label, index) => ({
+            label,
+            index,
+            priority: Number(label.dataset.labelPriority ?? 0),
+            bounds: this.textBounds(label)
+        })).sort((left, right) => right.priority - left.priority || left.index - right.index);
+        const accepted: Array<{ x: number; y: number; width: number; height: number }> = [];
+
+        candidates.forEach(candidate => {
+            const bounds = candidate.bounds;
+            const outside = bounds.x < -1
+                || bounds.y < -1
+                || bounds.x + bounds.width > Number(this.svg.getAttribute("width")) + 1
+                || bounds.y + bounds.height > Number(this.svg.getAttribute("height")) + 1;
+            const overlaps = accepted.some(other => {
+                return bounds.x < other.x + other.width + 3
+                    && bounds.x + bounds.width + 3 > other.x
+                    && bounds.y < other.y + other.height + 2
+                    && bounds.y + bounds.height + 2 > other.y;
+            });
+            if (outside || overlaps) {
+                candidate.label.setAttribute("visibility", "hidden");
+                return;
+            }
+            accepted.push(bounds);
+        });
+    }
+
+    private textBounds(label: SVGTextElement): { x: number; y: number; width: number; height: number } {
+        try {
+            const box = label.getBBox();
+            if (box.width > 0 && box.height > 0) {
+                return { x: box.x, y: box.y, width: box.width, height: box.height };
+            }
+        } catch {
+            // Fall back to an approximation in hosts that cannot measure a hidden SVG yet.
+        }
+
+        const fontSize = Number(label.getAttribute("font-size")) || 12;
+        const width = (label.textContent?.length ?? 0) * fontSize * 0.56;
+        const x = Number(label.getAttribute("x")) || 0;
+        const y = Number(label.getAttribute("y")) || 0;
+        const anchor = label.getAttribute("text-anchor");
+        return {
+            x: anchor === "middle" ? x - width / 2 : anchor === "end" ? x - width : x,
+            y: y - fontSize,
+            width,
+            height: fontSize * 1.15
+        };
     }
 
     private drawBaseline(x1: number, x2: number, y: number, color: string, width: number): void {

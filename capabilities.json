@@ -108,6 +108,40 @@
         }
       }
     },
+    "scenarioLabels": {
+      "displayName": "Scenario labels",
+      "properties": {
+        "actualLabel": {
+          "displayName": "Actual label",
+          "type": { "text": true }
+        },
+        "comparisonLabel": {
+          "displayName": "Comparison label",
+          "type": { "text": true }
+        }
+      }
+    },
+    "columnDesign": {
+      "displayName": "Column design",
+      "properties": {
+        "overlapActualPercent": {
+          "displayName": "Overlap actual width %",
+          "type": { "numeric": true }
+        },
+        "overlapComparisonPercent": {
+          "displayName": "Overlap comparison width %",
+          "type": { "numeric": true }
+        },
+        "integratedActualPercent": {
+          "displayName": "Integrated actual width %",
+          "type": { "numeric": true }
+        },
+        "integratedVariancePercent": {
+          "displayName": "Integrated variance width %",
+          "type": { "numeric": true }
+        }
+      }
+    },
     "dataLabels": {
       "displayName": "Data labels",
       "properties": {

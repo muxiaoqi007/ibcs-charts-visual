@@ -15,7 +15,7 @@ import ISelectionId = powerbi.visuals.ISelectionId;
 import DataView = powerbi.DataView;
 import DataViewValueColumn = powerbi.DataViewValueColumn;
 
-import { appendGrandTotal, buildVariancePoint, DisplayUnitsMode, LayoutMode, resolveLayout } from "./model";
+import { appendGrandTotal, buildVariancePoint, DisplayUnitsMode, LayoutMode, resolveLayout, resolveScenarioLabel } from "./model";
 import { IBCSRenderer, RendererDataPoint, RenderSettings } from "./renderer";
 import { VisualFormattingSettingsModel } from "./settings";
 
@@ -72,6 +72,11 @@ export class Visual implements IVisual {
                 responsive: layoutValue === "responsive",
                 actualName: converted.actualName,
                 comparisonName: converted.comparisonName,
+                actualLabel: this.formattingSettings.scenarioLabels.actualLabel.value.trim() || "AC",
+                comparisonLabel: resolveScenarioLabel(
+                    converted.comparisonName,
+                    this.formattingSettings.scenarioLabels.comparisonLabel.value
+                ),
                 title: this.resolveTitle(converted.actualName, converted.comparisonName),
                 settings: this.readSettings(),
                 selectedIds: this.selectionManager.getSelectionIds() as ISelectionId[]
@@ -110,7 +115,11 @@ export class Visual implements IVisual {
             comparisonColor: this.formattingSettings.colors.comparisonColor.value.value,
             positiveColor: this.formattingSettings.colors.positiveColor.value.value,
             negativeColor: this.formattingSettings.colors.negativeColor.value.value,
-            baselineColor: this.formattingSettings.colors.baselineColor.value.value
+            baselineColor: this.formattingSettings.colors.baselineColor.value.value,
+            overlapActualPercent: this.formattingSettings.columnDesign.overlapActualPercent.value,
+            overlapComparisonPercent: this.formattingSettings.columnDesign.overlapComparisonPercent.value,
+            integratedActualPercent: this.formattingSettings.columnDesign.integratedActualPercent.value,
+            integratedVariancePercent: this.formattingSettings.columnDesign.integratedVariancePercent.value
         };
     }
 

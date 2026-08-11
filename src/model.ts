@@ -17,6 +17,25 @@ export interface DisplayUnit {
     suffix: string;
 }
 
+export interface ColumnWidthSettings {
+    overlapActualPercent: number;
+    overlapComparisonPercent: number;
+    integratedActualPercent: number;
+    integratedVariancePercent: number;
+}
+
+export interface ColumnWidths {
+    overlapActual: number;
+    overlapComparison: number;
+    integratedActual: number;
+    integratedVariance: number;
+}
+
+export interface IntegratedVarianceGeometry {
+    top: number;
+    height: number;
+}
+
 export interface RawVariancePoint {
     category: string;
     actual: number | null | undefined;
@@ -64,6 +83,65 @@ export function buildVariancePoint(point: RawVariancePoint, treatNullsAsZeros: b
 
 export function isFavorable(value: number, invertVarianceColors: boolean): boolean {
     return invertVarianceColors ? value < 0 : value >= 0;
+}
+
+export function resolveScenarioLabel(displayName: string, configuredLabel: string): string {
+    const configured = configuredLabel.trim();
+    if (configured) {
+        return configured;
+    }
+
+    const normalized = displayName.trim().toLowerCase();
+    if (/\b(forecast|fc|estimate|outlook)\b/.test(normalized)) {
+        return "FC";
+    }
+    if (/\b(plan|pl|budget|bud|target)\b/.test(normalized)) {
+        return "PL";
+    }
+    if (/\b(previous|prior|py|last\s+year|ly)\b/.test(normalized)) {
+        return "PY";
+    }
+
+    const initials = displayName
+        .trim()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter(Boolean)
+        .map(part => part[0])
+        .join("")
+        .toUpperCase();
+    return initials.slice(0, 3) || "PY";
+}
+
+export function resolveColumnWidths(step: number, settings: ColumnWidthSettings): ColumnWidths {
+    const safeStep = Number.isFinite(step) ? Math.max(0, step) : 0;
+    const percent = (value: number, fallback: number): number => {
+        return Number.isFinite(value) ? Math.max(1, Math.min(100, value)) / 100 : fallback;
+    };
+    const comparison = Math.min(240, Math.max(3, safeStep * percent(settings.overlapComparisonPercent, 0.30)));
+    const actual = Math.min(
+        comparison,
+        Math.min(240, Math.max(2, safeStep * percent(settings.overlapActualPercent, 0.23)))
+    );
+    const integratedActual = Math.min(240, Math.max(8, safeStep * percent(settings.integratedActualPercent, 0.80)));
+    const variance = integratedActual * percent(settings.integratedVariancePercent, 0.70);
+
+    return {
+        overlapActual: actual,
+        overlapComparison: comparison,
+        integratedActual,
+        integratedVariance: variance
+    };
+}
+
+export function resolveIntegratedVarianceGeometry(actualY: number, comparisonY: number): IntegratedVarianceGeometry {
+    return {
+        top: Math.min(actualY, comparisonY),
+        height: Math.max(3, Math.abs(actualY - comparisonY))
+    };
+}
+
+export function canShowIntegratedVarianceLabel(step: number, varianceHeight: number, fontSize: number): boolean {
+    return step >= 58 && varianceHeight >= fontSize + 5;
 }
 
 export function resolveLayout(

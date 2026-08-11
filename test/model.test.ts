@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { appendGrandTotal, buildVariancePoint, isFavorable, resolveDisplayUnit, resolveLayout } from "../src/model";
+import {
+    appendGrandTotal,
+    buildVariancePoint,
+    canShowIntegratedVarianceLabel,
+    isFavorable,
+    resolveColumnWidths,
+    resolveDisplayUnit,
+    resolveIntegratedVarianceGeometry,
+    resolveLayout,
+    resolveScenarioLabel
+} from "../src/model";
 
 describe("buildVariancePoint", () => {
     it("computes signed absolute and relative variance", () => {
@@ -73,5 +83,58 @@ describe("display units", () => {
     it("selects automatic units from the largest absolute value", () => {
         expect(resolveDisplayUnit("auto", [-2_500_000, 100])).toEqual({ divisor: 1_000_000, suffix: "M" });
         expect(resolveDisplayUnit("auto", [999, null])).toEqual({ divisor: 1, suffix: "" });
+    });
+});
+
+describe("scenario labels", () => {
+    it("detects common comparison scenarios", () => {
+        expect(resolveScenarioLabel("Previous year", "")).toBe("PY");
+        expect(resolveScenarioLabel("Operating Plan", "")).toBe("PL");
+        expect(resolveScenarioLabel("Rolling Forecast", "")).toBe("FC");
+    });
+
+    it("prefers the configured label and derives a fallback abbreviation", () => {
+        expect(resolveScenarioLabel("Previous year", "LY")).toBe("LY");
+        expect(resolveScenarioLabel("Reference Scenario", "")).toBe("RS");
+    });
+});
+
+describe("column widths", () => {
+    it("keeps the comparison wider and the integrated variance narrower", () => {
+        expect(resolveColumnWidths(270, {
+            overlapActualPercent: 23,
+            overlapComparisonPercent: 30,
+            integratedActualPercent: 80,
+            integratedVariancePercent: 70
+        })).toEqual({
+            overlapActual: 62.1,
+            overlapComparison: 81,
+            integratedActual: 216,
+            integratedVariance: 151.2
+        });
+    });
+
+    it("prevents the foreground overlap column from exceeding the comparison", () => {
+        const widths = resolveColumnWidths(100, {
+            overlapActualPercent: 80,
+            overlapComparisonPercent: 20,
+            integratedActualPercent: 80,
+            integratedVariancePercent: 70
+        });
+        expect(widths.overlapActual).toBe(20);
+        expect(widths.overlapComparison).toBe(20);
+    });
+});
+
+describe("integrated variance geometry", () => {
+    it("keeps a tiny variance visible without showing a colliding label", () => {
+        const geometry = resolveIntegratedVarianceGeometry(100, 99.5);
+        expect(geometry).toEqual({ top: 99.5, height: 3 });
+        expect(canShowIntegratedVarianceLabel(120, geometry.height, 12)).toBe(false);
+    });
+
+    it("shows a variance label only when width and height both fit", () => {
+        expect(canShowIntegratedVarianceLabel(80, 24, 12)).toBe(true);
+        expect(canShowIntegratedVarianceLabel(40, 24, 12)).toBe(false);
     });
 });
