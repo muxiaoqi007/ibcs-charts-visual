@@ -27,7 +27,7 @@ Download the latest `.pbiviz` from [GitHub Releases](https://github.com/muxiaoqi
 - Actual / Relative
 - Actual
 
-Responsive mode resolves to the richest layout that fits the available height. If no comparison measure is supplied, the visual automatically falls back to Actual.
+Responsive mode considers the visual's width, height, and category density. Spacious visuals show Actual, absolute variance, and relative variance as aligned panels; medium visuals keep Actual and absolute variance; compact or dense visuals fold variance indicators into the Actual panel. Titles, axes, value labels, and category labels are progressively fitted or reduced to avoid clipping. If no comparison measure is supplied, the visual automatically falls back to Actual.
 
 ## Semantics
 

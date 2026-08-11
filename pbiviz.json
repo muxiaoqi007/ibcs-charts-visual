@@ -4,7 +4,7 @@
     "displayName": "IBCS Charts",
     "guid": "IBCSChartsE4C67B88137F4C35A06FE091C117D316",
     "visualClassName": "Visual",
-    "version": "1.1.0.0",
+    "version": "1.2.0.0",
     "description": "Responsive IBCS-style actual, absolute variance, and relative variance charts.",
     "supportUrl": "https://github.com/muxiaoqi007/ibcs-charts-visual/issues",
     "gitHubUrl": "https://github.com/muxiaoqi007/ibcs-charts-visual"
@@ -22,5 +22,5 @@
   "capabilities": "capabilities.json",
   "dependencies": null,
   "stringResources": [],
-  "version": "1.1.0.0"
+  "version": "1.2.0.0"
 }

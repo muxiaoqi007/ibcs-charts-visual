@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0.0 — 2026-08-11
+
+- Made Responsive layout react to width, height, and category density.
+- Added automatic compact integrated-variance mode and progressive label, axis, and margin fitting.
+- Refined Actual/PY overlap and added compact colored variance blocks with a final relative-variance arrow.
+
 ## 1.1.0.0 — 2026-08-09
 
 - Replaced repeated tooltip-role projections with one dedicated Tooltips field well.

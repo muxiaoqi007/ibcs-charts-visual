@@ -66,23 +66,37 @@ export function isFavorable(value: number, invertVarianceColors: boolean): boole
     return invertVarianceColors ? value < 0 : value >= 0;
 }
 
-export function resolveLayout(mode: LayoutMode, height: number, hasComparison: boolean): ResolvedLayout {
+export function resolveLayout(
+    mode: LayoutMode,
+    width: number,
+    height: number,
+    hasComparison: boolean,
+    categoryCount: number
+): ResolvedLayout {
     if (!hasComparison) {
         return "actual";
     }
     if (mode !== "responsive") {
         return mode;
     }
-    if (height >= 470) {
+
+    const safeWidth = Number.isFinite(width) ? Math.max(0, width) : 0;
+    const safeHeight = Number.isFinite(height) ? Math.max(0, height) : 0;
+    const safeCategoryCount = Number.isFinite(categoryCount) ? Math.max(1, Math.floor(categoryCount)) : 1;
+    const estimatedCategoryWidth = Math.max(0, safeWidth - 78) / safeCategoryCount;
+
+    // Separate variance panels need both vertical room and enough horizontal
+    // space per category to keep their marks and labels meaningful.
+    if (safeWidth >= 360 && safeHeight >= 460 && estimatedCategoryWidth >= 18) {
         return "actualAbsoluteRelative";
     }
-    if (height >= 310) {
+    if (safeWidth >= 260 && safeHeight >= 300 && estimatedCategoryWidth >= 12) {
         return "actualAbsolute";
     }
-    if (height >= 190) {
-        return "absoluteRelative";
-    }
-    return "absolute";
+
+    // Zebra BI-style responsive charts fold the variance back into the main
+    // actual/comparison panel when the visual becomes compact.
+    return "integratedVariance";
 }
 
 export function appendGrandTotal(points: VariancePoint[]): VariancePoint[] {

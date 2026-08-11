@@ -56,13 +56,20 @@ export class Visual implements IVisual {
 
             const converted = this.convertData(dataView, options);
             const layoutValue = String(this.formattingSettings.chartSettings.layout.value.value) as LayoutMode;
-            const layout = resolveLayout(layoutValue, options.viewport.height, converted.hasComparison);
+            const layout = resolveLayout(
+                layoutValue,
+                options.viewport.width,
+                options.viewport.height,
+                converted.hasComparison,
+                converted.points.length
+            );
 
             this.renderer.render({
                 width: options.viewport.width,
                 height: options.viewport.height,
                 points: converted.points,
                 layout,
+                responsive: layoutValue === "responsive",
                 actualName: converted.actualName,
                 comparisonName: converted.comparisonName,
                 title: this.resolveTitle(converted.actualName, converted.comparisonName),

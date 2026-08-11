@@ -39,12 +39,17 @@ describe("variance semantics", () => {
         expect(isFavorable(-5, true)).toBe(true);
     });
 
-    it("selects responsive layouts by available height", () => {
-        expect(resolveLayout("responsive", 520, true)).toBe("actualAbsoluteRelative");
-        expect(resolveLayout("responsive", 350, true)).toBe("actualAbsolute");
-        expect(resolveLayout("responsive", 240, true)).toBe("absoluteRelative");
-        expect(resolveLayout("responsive", 150, true)).toBe("absolute");
-        expect(resolveLayout("responsive", 520, false)).toBe("actual");
+    it("selects responsive layouts by width, height, and category density", () => {
+        expect(resolveLayout("responsive", 720, 520, true, 12)).toBe("actualAbsoluteRelative");
+        expect(resolveLayout("responsive", 520, 350, true, 12)).toBe("actualAbsolute");
+        expect(resolveLayout("responsive", 520, 240, true, 12)).toBe("integratedVariance");
+        expect(resolveLayout("responsive", 240, 520, true, 12)).toBe("integratedVariance");
+        expect(resolveLayout("responsive", 520, 520, true, 40)).toBe("integratedVariance");
+        expect(resolveLayout("responsive", 720, 520, false, 12)).toBe("actual");
+    });
+
+    it("does not change an explicitly selected layout", () => {
+        expect(resolveLayout("relative", 180, 120, true, 40)).toBe("relative");
     });
 });
 
