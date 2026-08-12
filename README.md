@@ -29,7 +29,9 @@ Download the latest `.pbiviz` from [GitHub Releases](https://github.com/muxiaoqi
 
 Responsive mode considers the visual's width, height, and category density. Spacious visuals show Actual, absolute variance, and relative variance as aligned panels; medium visuals keep Actual and absolute variance; compact or dense visuals fold variance indicators into the Actual panel. Titles, axes, value labels, and category labels are progressively fitted or reduced to avoid clipping. If no comparison measure is supplied, the visual automatically falls back to Actual.
 
-Scenario labels automatically recognize common Previous Year (PY), Plan (PL), and Forecast (FC) field names and can be overridden in the formatting pane. The Column design card controls the widths of overlapping Actual/Comparison columns and compact integrated Actual/variance columns. Value labels are measured after rendering and lower-priority labels are removed when they collide.
+Scenario labels automatically recognize common English and Chinese Previous Year (PY), Plan (PL), and Forecast (FC) field names and can be overridden in the formatting pane. Actual-only charts show only the Actual scenario label. The Column design card controls the widths of overlapping Actual/Comparison columns and compact integrated Actual/variance columns. Value labels are measured after rendering and lower-priority labels are removed when they collide.
+
+Version 1.5 adds Top N, Bottom N, and Top/Bottom N views. Excluded categories can be recomputed into a single “其他” category, while an optional “总计” continues to use the complete unfiltered dataset. The independent ΔPY column width now defaults to 30% of category spacing and can be adjusted separately. All Power BI field-well and formatting-pane labels are Chinese.
 
 ## Semantics
 
@@ -40,8 +42,12 @@ Scenario labels automatically recognize common Previous Year (PY), Plan (PL), an
 - Enable **Invert variance colors** for measures where lower is better, such as cost or defect rate.
 - Enable **Treat nulls as zeros** only when a missing observation truly means zero.
 - **Grand total** sums Actual and Comparison separately, then recomputes both variances from those totals.
+- **前 N 项与其他** can rank by the magnitude of Actual or absolute variance, preserve the source display order, and aggregate excluded categories as “其他”.
 - Data-label units can be Auto, None, Thousands (K), Millions (M), Billions (B), or Trillions (T). Relative variance remains a percentage.
 - Additional measures placed in `Tooltips` appear in the hover card and preserve their model format strings.
+- Cross-highlighting from other Power BI visuals keeps the full values as context and draws highlighted values in the foreground.
+- High-contrast mode uses the Power BI host palette; category marks also expose the native Power BI context menu.
+- Actual, Comparison, and absolute variance labels preserve model number-format semantics and use the Power BI host locale.
 
 ## Development
 
@@ -60,5 +66,5 @@ See [development](docs/development.md), [field mapping](docs/field-mapping.md), 
 
 - One categorical field, two chart measures, and optional additional tooltip measures.
 - No drill hierarchy, small multiples, forecast scenarios, or per-category favorable-direction metadata yet.
-- Number labels currently use the browser/Power BI locale and the visual's decimal-place setting; model dynamic format strings are not yet applied.
+- Static model format strings are supported; calculation-group dynamic format strings still require additional validation in the Power BI host.
 - Rendering must still be visually checked in Power BI Desktop because the local build environment cannot emulate the full Power BI host.

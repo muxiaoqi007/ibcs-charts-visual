@@ -3,13 +3,13 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: #ffffff;
-    color: #111111;
+    background: var(--ibcs-background, #ffffff);
+    color: var(--ibcs-foreground, #111111);
     font-family: "Segoe UI", Arial, sans-serif;
     user-select: none;
 
     text {
-        fill: #111111;
+        fill: var(--ibcs-foreground, #111111);
     }
 
     .ibcs-title {
@@ -25,7 +25,7 @@
     .ibcs-value-label {
         font-weight: 500;
         paint-order: stroke;
-        stroke: #ffffff;
+        stroke: var(--ibcs-background, #ffffff);
         stroke-width: 2.5px;
         stroke-linejoin: round;
     }
@@ -35,7 +35,7 @@
     }
 
     .ibcs-integrated-value-label {
-        fill: #ffffff;
+        fill: var(--ibcs-background, #ffffff);
         stroke: none;
     }
 
@@ -49,7 +49,7 @@
             .ibcs-bar,
             circle,
             line {
-                filter: drop-shadow(0 0 2px #0067c0);
+                filter: drop-shadow(0 0 2px var(--ibcs-focus, #0067c0));
             }
         }
     }
@@ -62,8 +62,20 @@
         shape-rendering: crispEdges;
     }
 
+    &[data-high-contrast="true"] {
+        .ibcs-comparison {
+            stroke: var(--ibcs-foreground);
+            stroke-width: 1.5px;
+        }
+
+        .ibcs-integrated-value-label {
+            fill: var(--ibcs-background);
+        }
+    }
+
     .ibcs-empty-message {
-        fill: #666666;
+        fill: var(--ibcs-foreground, #666666);
+        opacity: 0.7;
         font-size: 13px;
     }
 }

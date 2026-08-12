@@ -1,6 +1,7 @@
 "use strict";
 
 import powerbi from "powerbi-visuals-api";
+import { valueFormatter } from "powerbi-visuals-utils-formattingutils";
 import ISelectionId = powerbi.visuals.ISelectionId;
 import ITooltipService = powerbi.extensibility.ITooltipService;
 import {
@@ -9,6 +10,7 @@ import {
     canShowIntegratedVarianceLabel,
     isFavorable,
     ResolvedLayout,
+    resolveActualPanelLabel,
     resolveColumnWidths,
     resolveDisplayUnit,
     resolveIntegratedVarianceGeometry,
@@ -33,9 +35,13 @@ interface PanelBox {
 }
 
 export interface RendererDataPoint extends VariancePoint {
+    highlight?: VariancePoint | null;
+    highlightsActive?: boolean;
     selectionId?: ISelectionId;
     actualTooltipValue?: string | null;
     comparisonTooltipValue?: string | null;
+    actualFormat?: string;
+    comparisonFormat?: string;
     tooltipItems?: Array<{ displayName: string; value: string }>;
 }
 
@@ -58,6 +64,7 @@ export interface RenderSettings {
     overlapComparisonPercent: number;
     integratedActualPercent: number;
     integratedVariancePercent: number;
+    variancePanelPercent: number;
 }
 
 interface RenderOptions {
@@ -68,11 +75,21 @@ interface RenderOptions {
     responsive: boolean;
     actualName: string;
     comparisonName: string;
+    hasComparison: boolean;
     actualLabel: string;
     comparisonLabel: string;
     title: string;
     settings: RenderSettings;
     selectedIds: ISelectionId[];
+    locale: string;
+    theme: RenderTheme;
+}
+
+interface RenderTheme {
+    highContrast: boolean;
+    foreground: string;
+    background: string;
+    selected: string;
 }
 
 interface RenderProfile {
@@ -88,6 +105,7 @@ type ActiveRenderOptions = RenderOptions & { profile: RenderProfile };
 interface RendererCallbacks {
     select(selectionId: ISelectionId, multiSelect: boolean): void;
     clear(): void;
+    contextMenu(selectionId: ISelectionId, position: { x: number; y: number }): void;
 }
 
 export class IBCSRenderer {
@@ -110,6 +128,10 @@ export class IBCSRenderer {
         this.svg.setAttribute("width", String(Math.max(0, options.width)));
         this.svg.setAttribute("height", String(Math.max(0, options.height)));
         this.svg.setAttribute("viewBox", `0 0 ${Math.max(1, options.width)} ${Math.max(1, options.height)}`);
+        this.svg.style.setProperty("--ibcs-foreground", options.theme.foreground);
+        this.svg.style.setProperty("--ibcs-background", options.theme.background);
+        this.svg.style.setProperty("--ibcs-focus", options.theme.selected);
+        this.svg.dataset.highContrast = String(options.theme.highContrast);
         this.selectedIds = options.selectedIds;
         this.displayUnit = resolveDisplayUnit(
             options.settings.displayUnits,
@@ -119,11 +141,11 @@ export class IBCSRenderer {
         this.svg.setAttribute("aria-label", options.title || "IBCS chart");
 
         if (options.width < 96 || options.height < 72) {
-            this.drawMessage("Increase the visual size", options.width, options.height);
+            this.drawMessage("请增大视觉对象尺寸", options.width, options.height);
             return;
         }
         if (options.points.length === 0) {
-            this.drawMessage("Add Category and Actual fields", options.width, options.height);
+            this.drawMessage("请添加“类目”和“实际值”字段", options.width, options.height);
             return;
         }
 
@@ -133,6 +155,11 @@ export class IBCSRenderer {
             : baseProfile;
         const settings: RenderSettings = {
             ...options.settings,
+            actualColor: options.theme.highContrast ? options.theme.foreground : options.settings.actualColor,
+            comparisonColor: options.theme.highContrast ? options.theme.background : options.settings.comparisonColor,
+            positiveColor: options.theme.highContrast ? options.theme.foreground : options.settings.positiveColor,
+            negativeColor: options.theme.highContrast ? options.theme.foreground : options.settings.negativeColor,
+            baselineColor: options.theme.highContrast ? options.theme.foreground : options.settings.baselineColor,
             showTitle: options.settings.showTitle && (!options.responsive || options.height >= 112),
             showVerticalAxis: options.settings.showVerticalAxis && (!options.responsive || options.width >= 360),
             showDataLabels: options.settings.showDataLabels && (!options.responsive || (options.width >= 180 && options.height >= 112)),
@@ -266,51 +293,75 @@ export class IBCSRenderer {
 
         this.drawBaseline(box.x, box.x + box.width, zeroY, options.settings.baselineColor, 1.5);
         if (options.profile.showPanelLabels) {
-            this.drawPanelLabel(`${options.comparisonLabel}\n${options.actualLabel}`, box, options.settings.valueFontSize);
+            this.drawPanelLabel(
+                resolveActualPanelLabel(options.actualLabel, options.comparisonLabel, options.hasComparison),
+                box,
+                options.settings.valueFontSize
+            );
         }
         this.drawVerticalAxis(options, box, min, max, scale);
 
         options.points.forEach((point, index) => {
             const centerX = box.x + step * (index + 0.5);
             const group = this.createCategoryGroup(point, options, centerX);
+            const actual = this.renderedValue(point, "actual");
+            const comparison = this.renderedValue(point, "comparison");
 
-            if (point.comparison !== null) {
-                this.drawBar(group, centerX - comparisonWidth / 2, zeroY, scale(point.comparison), comparisonWidth, options.settings.comparisonColor, "comparison");
-                const comparisonY = scale(point.comparison);
-                const actualY = point.actual === null ? null : scale(point.actual);
+            if (point.highlightsActive) {
+                const backgroundGroup = this.createElement("g", { class: "ibcs-highlight-background", opacity: 0.24 });
+                if (point.comparison !== null) {
+                    this.drawBar(backgroundGroup, centerX - comparisonWidth / 2, zeroY, scale(point.comparison), comparisonWidth, options.settings.comparisonColor, "comparison");
+                }
+                if (point.actual !== null) {
+                    this.drawBar(backgroundGroup, centerX - actualWidth / 2, zeroY, scale(point.actual), actualWidth, options.settings.actualColor, "actual");
+                }
+                group.appendChild(backgroundGroup);
+            }
+
+            if (comparison !== null) {
+                this.drawBar(group, centerX - comparisonWidth / 2, zeroY, scale(comparison), comparisonWidth, options.settings.comparisonColor, "comparison");
+                const comparisonY = scale(comparison);
+                const actualY = actual === null ? null : scale(actual);
                 if (options.settings.showDataLabels && step >= 46 && actualY === null) {
                     this.drawValueLabel(
                         group,
                         centerX,
                         comparisonY,
                         zeroY,
-                        this.formatNumber(point.comparison, options.settings.decimalPlaces),
+                        this.formatNumber(comparison, options.settings.decimalPlaces, options.locale, point.comparisonFormat),
                         options.settings.valueFontSize,
                         false,
                         1
                     );
                 }
             }
-            if (point.actual !== null) {
-                this.drawBar(group, centerX - actualWidth / 2, zeroY, scale(point.actual), actualWidth, options.settings.actualColor, "actual");
+            if (actual !== null) {
+                this.drawBar(group, centerX - actualWidth / 2, zeroY, scale(actual), actualWidth, options.settings.actualColor, "actual");
                 if (options.settings.showDataLabels && step >= 24) {
                     this.drawValueLabel(
                         group,
                         centerX,
-                        scale(point.actual),
+                        scale(actual),
                         zeroY,
-                        this.formatNumber(point.actual, options.settings.decimalPlaces),
+                        this.formatNumber(actual, options.settings.decimalPlaces, options.locale, point.actualFormat),
                         options.settings.valueFontSize,
                         false,
                         4
                     );
                 }
             }
-            if (index === options.points.length - 1 && point.absoluteVariance !== null && point.actual !== null && point.comparison !== null && step >= 18) {
+            const absoluteVariance = this.renderedValue(point, "absoluteVariance");
+            const relativeVariance = this.renderedValue(point, "relativeVariance");
+            if (index === options.points.length - 1
+                && absoluteVariance !== null
+                && absoluteVariance !== 0
+                && actual !== null
+                && comparison !== null
+                && step >= 18) {
                 const arrowX = Math.min(box.x + box.width - 4, centerX + comparisonWidth / 2 + 3);
-                const actualY = scale(point.actual);
-                const comparisonY = scale(point.comparison);
-                const color = this.varianceColor(point.absoluteVariance, options.settings);
+                const actualY = scale(actual);
+                const comparisonY = scale(comparison);
+                const color = this.varianceColor(absoluteVariance, options.settings);
                 const line = this.createElement("line", { x1: arrowX, y1: comparisonY, x2: arrowX, y2: actualY, stroke: color, "stroke-width": 2 });
                 group.appendChild(line);
                 const direction = actualY < comparisonY ? -1 : 1;
@@ -321,7 +372,7 @@ export class IBCSRenderer {
                     "stroke-width": 2
                 });
                 group.appendChild(arrow);
-                if (index === options.points.length - 1 && point.relativeVariance !== null && options.settings.showDataLabels && step >= 42) {
+                if (relativeVariance !== null && options.settings.showDataLabels && step >= 42) {
                     const varianceLabel = this.createElement("text", {
                         class: "ibcs-value-label ibcs-relative-label",
                         x: box.x + box.width - 3,
@@ -330,7 +381,7 @@ export class IBCSRenderer {
                         "font-size": options.settings.valueFontSize,
                         "data-label-priority": 2
                     });
-                    varianceLabel.textContent = this.formatPercent(point.relativeVariance, options.settings.decimalPlaces);
+                    varianceLabel.textContent = this.formatPercent(relativeVariance, options.settings.decimalPlaces, options.locale);
                     group.appendChild(varianceLabel);
                 }
             }
@@ -364,17 +415,42 @@ export class IBCSRenderer {
         options.points.forEach((point, index) => {
             const centerX = box.x + step * (index + 0.5);
             const group = this.createCategoryGroup(point, options, centerX);
-            const actualY = point.actual === null ? null : scale(point.actual);
-            const comparisonY = point.comparison === null ? null : scale(point.comparison);
+            const actual = this.renderedValue(point, "actual");
+            const comparison = this.renderedValue(point, "comparison");
+            const absoluteVariance = this.renderedValue(point, "absoluteVariance");
+            const relativeVariance = this.renderedValue(point, "relativeVariance");
+            const actualY = actual === null ? null : scale(actual);
+            const comparisonY = comparison === null ? null : scale(comparison);
 
-            if (point.actual !== null && actualY !== null) {
+            if (point.highlightsActive) {
+                const backgroundGroup = this.createElement("g", { class: "ibcs-highlight-background", opacity: 0.24 });
+                if (point.actual !== null) {
+                    this.drawBar(backgroundGroup, centerX - actualWidth / 2, zeroY, scale(point.actual), actualWidth, options.settings.actualColor, "actual");
+                } else if (point.comparison !== null) {
+                    this.drawBar(backgroundGroup, centerX - actualWidth / 2, zeroY, scale(point.comparison), actualWidth, options.settings.comparisonColor, "comparison");
+                }
+                if (point.absoluteVariance !== null && point.absoluteVariance !== 0 && point.actual !== null && point.comparison !== null) {
+                    const rawGeometry = resolveIntegratedVarianceGeometry(scale(point.actual), scale(point.comparison));
+                    backgroundGroup.appendChild(this.createElement("rect", {
+                        class: "ibcs-bar ibcs-integrated-variance",
+                        x: centerX + actualWidth / 2 - varianceWidth,
+                        y: rawGeometry.top,
+                        width: varianceWidth,
+                        height: rawGeometry.height,
+                        fill: this.varianceColor(point.absoluteVariance, options.settings)
+                    }));
+                }
+                group.appendChild(backgroundGroup);
+            }
+
+            if (actual !== null && actualY !== null) {
                 this.drawBar(group, centerX - actualWidth / 2, zeroY, actualY, actualWidth, options.settings.actualColor, "actual");
-            } else if (point.comparison !== null && comparisonY !== null) {
+            } else if (comparison !== null && comparisonY !== null) {
                 this.drawBar(group, centerX - actualWidth / 2, zeroY, comparisonY, actualWidth, options.settings.comparisonColor, "comparison");
             }
 
-            if (point.absoluteVariance !== null && actualY !== null && comparisonY !== null) {
-                const color = this.varianceColor(point.absoluteVariance, options.settings);
+            if (absoluteVariance !== null && absoluteVariance !== 0 && actualY !== null && comparisonY !== null) {
+                const color = this.varianceColor(absoluteVariance, options.settings);
                 const varianceGeometry = resolveIntegratedVarianceGeometry(actualY, comparisonY);
                 const overlay = this.createElement("rect", {
                     class: "ibcs-bar ibcs-integrated-variance",
@@ -397,25 +473,31 @@ export class IBCSRenderer {
                         "font-size": options.settings.valueFontSize,
                         "data-label-priority": 3
                     });
-                    varianceLabel.textContent = this.formatSigned(point.absoluteVariance, options.settings.decimalPlaces);
+                    varianceLabel.textContent = this.formatSigned(
+                        absoluteVariance,
+                        options.settings.decimalPlaces,
+                        options.locale,
+                        point.actualFormat
+                    );
                     group.appendChild(varianceLabel);
                 }
 
-                if (index === options.points.length - 1 && point.relativeVariance !== null && step >= 48) {
+                if (index === options.points.length - 1 && relativeVariance !== null && step >= 48) {
                     this.drawIntegratedVarianceArrow(
                         group,
                         box.x + box.width + options.profile.marginRight - 4,
                         centerX + actualWidth / 2 + Math.min(44, step * 0.18),
                         comparisonY,
                         actualY,
-                        point.relativeVariance,
+                        relativeVariance,
                         color,
-                        options.settings
+                        options.settings,
+                        options.locale
                     );
                 }
             }
 
-            const displayedValue = point.actual ?? point.comparison;
+            const displayedValue = actual ?? comparison;
             const displayedY = actualY ?? comparisonY;
             if (displayedValue !== null && displayedY !== null && options.settings.showDataLabels && step >= 28) {
                 const barHeight = Math.abs(zeroY - displayedY);
@@ -428,7 +510,12 @@ export class IBCSRenderer {
                         "font-size": options.settings.valueFontSize,
                         "data-label-priority": 4
                     });
-                    label.textContent = this.formatNumber(displayedValue, options.settings.decimalPlaces);
+                    label.textContent = this.formatNumber(
+                        displayedValue,
+                        options.settings.decimalPlaces,
+                        options.locale,
+                        actual !== null ? point.actualFormat : point.comparisonFormat
+                    );
                     group.appendChild(label);
                 } else {
                     const labelY = actualY !== null && comparisonY !== null
@@ -439,7 +526,12 @@ export class IBCSRenderer {
                         centerX,
                         labelY,
                         zeroY,
-                        this.formatNumber(displayedValue, options.settings.decimalPlaces),
+                        this.formatNumber(
+                            displayedValue,
+                            options.settings.decimalPlaces,
+                            options.locale,
+                            actual !== null ? point.actualFormat : point.comparisonFormat
+                        ),
                         options.settings.valueFontSize,
                         false,
                         4
@@ -459,9 +551,10 @@ export class IBCSRenderer {
         actualY: number,
         relativeVariance: number,
         color: string,
-        settings: RenderSettings
+        settings: RenderSettings,
+        locale: string
     ): void {
-        const label = this.formatPercent(relativeVariance, settings.decimalPlaces);
+        const label = this.formatPercent(relativeVariance, settings.decimalPlaces, locale);
         const estimatedLabelWidth = label.length * settings.valueFontSize * 0.56;
         const arrowX = Math.min(desiredArrowX, visualRight - estimatedLabelWidth - 9);
         const direction = actualY >= comparisonY ? 1 : -1;
@@ -527,7 +620,7 @@ export class IBCSRenderer {
         const scale = this.linearScale(min, max, rangeMin, rangeMax);
         const zeroY = scale(0);
         const step = box.width / options.points.length;
-        const barWidth = Math.min(52, Math.max(3, step * 0.72));
+        const barWidth = resolveColumnWidths(step, options.settings).variancePanel;
 
         this.drawBaseline(box.x, box.x + box.width, zeroY, options.settings.baselineColor, 3);
         if (options.profile.showPanelLabels) {
@@ -540,34 +633,60 @@ export class IBCSRenderer {
         this.drawVerticalAxis(options, box, min, max, scale, relative);
 
         options.points.forEach((point, index) => {
-            const value = relative ? point.relativeVariance : point.absoluteVariance;
+            const value = relative
+                ? this.renderedValue(point, "relativeVariance")
+                : this.renderedValue(point, "absoluteVariance");
+            const centerX = box.x + step * (index + 0.5);
+            const group = this.createCategoryGroup(point, options, centerX);
+            const rawValue = relative ? point.relativeVariance : point.absoluteVariance;
+            if (point.highlightsActive && rawValue !== null && rawValue !== 0) {
+                const rawY = scale(rawValue);
+                const backgroundGroup = this.createElement("g", { class: "ibcs-highlight-background", opacity: 0.24 });
+                const rawColor = this.varianceColor(rawValue, options.settings);
+                if (relative) {
+                    backgroundGroup.append(
+                        this.createElement("line", {
+                            x1: centerX,
+                            y1: zeroY,
+                            x2: centerX,
+                            y2: rawY,
+                            stroke: rawColor,
+                            "stroke-width": Math.max(3, Math.min(5, step * 0.08))
+                        }),
+                        this.createElement("circle", { cx: centerX, cy: rawY, r: 4.2, fill: options.theme.foreground })
+                    );
+                } else {
+                    this.drawBar(backgroundGroup, centerX - barWidth / 2, zeroY, rawY, barWidth, rawColor, "variance");
+                }
+                group.appendChild(backgroundGroup);
+            }
             if (value === null) {
+                this.svg.appendChild(group);
                 return;
             }
-            const centerX = box.x + step * (index + 0.5);
             const valueY = scale(value);
-            const group = this.createCategoryGroup(point, options, centerX);
-            const color = this.varianceColor(value, options.settings);
-
-            if (relative) {
-                const stem = this.createElement("line", {
-                    x1: centerX,
-                    y1: zeroY,
-                    x2: centerX,
-                    y2: valueY,
-                    stroke: color,
-                    "stroke-width": Math.max(3, Math.min(5, step * 0.08))
-                });
-                const dot = this.createElement("circle", { cx: centerX, cy: valueY, r: 4.2, fill: "#000000" });
-                group.append(stem, dot);
-            } else {
-                this.drawBar(group, centerX - barWidth / 2, zeroY, valueY, barWidth, color, "variance");
+            if (value !== 0) {
+                const color = this.varianceColor(value, options.settings);
+                if (relative) {
+                    const stem = this.createElement("line", {
+                        x1: centerX,
+                        y1: zeroY,
+                        x2: centerX,
+                        y2: valueY,
+                        stroke: color,
+                        "stroke-width": Math.max(3, Math.min(5, step * 0.08))
+                    });
+                const dot = this.createElement("circle", { cx: centerX, cy: valueY, r: 4.2, fill: options.theme.foreground });
+                    group.append(stem, dot);
+                } else {
+                    this.drawBar(group, centerX - barWidth / 2, zeroY, valueY, barWidth, color, "variance");
+                }
             }
 
             if (options.settings.showDataLabels && step >= 24) {
                 const label = relative
-                    ? this.formatPercent(value, options.settings.decimalPlaces)
-                    : this.formatSigned(value, options.settings.decimalPlaces);
+                    ? this.formatPercent(value, options.settings.decimalPlaces, options.locale)
+                    : this.formatSigned(value, options.settings.decimalPlaces, options.locale, point.actualFormat);
                 this.drawValueLabel(
                     group,
                     centerX,
@@ -633,7 +752,7 @@ export class IBCSRenderer {
             return;
         }
         const axisX = box.x - 6;
-        const axis = this.createElement("line", { x1: axisX, y1: box.y + 5, x2: axisX, y2: box.y + box.height - 5, stroke: "#B5B5B5", "stroke-width": 1 });
+        const axis = this.createElement("line", { x1: axisX, y1: box.y + 5, x2: axisX, y2: box.y + box.height - 5, stroke: options.theme.foreground, "stroke-opacity": 0.35, "stroke-width": 1 });
         this.svg.appendChild(axis);
         [min, max].forEach(value => {
             const text = this.createElement("text", {
@@ -643,7 +762,9 @@ export class IBCSRenderer {
                 "text-anchor": "end",
                 "font-size": Math.max(8, options.settings.valueFontSize - 2)
             });
-            text.textContent = percent ? this.formatPercent(value, options.settings.decimalPlaces) : this.formatNumber(value, options.settings.decimalPlaces);
+            text.textContent = percent
+                ? this.formatPercent(value, options.settings.decimalPlaces, options.locale)
+                : this.formatNumber(value, options.settings.decimalPlaces, options.locale);
             this.svg.appendChild(text);
         });
     }
@@ -683,6 +804,11 @@ export class IBCSRenderer {
                     this.callbacks.select(point.selectionId as ISelectionId, event.ctrlKey || event.metaKey);
                 }
             });
+            group.addEventListener("contextmenu", event => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.callbacks.contextMenu(point.selectionId as ISelectionId, { x: event.clientX, y: event.clientY });
+            });
         }
         group.addEventListener("mousemove", event => this.showTooltip(event, point, options));
         group.addEventListener("mouseleave", () => this.tooltipService.hide({ immediately: true, isTouchEvent: false }));
@@ -694,24 +820,27 @@ export class IBCSRenderer {
         if (!this.tooltipService.enabled()) {
             return;
         }
-        const items: powerbi.extensibility.VisualTooltipDataItem[] = [{ displayName: "Category", value: point.category }];
+        const items: powerbi.extensibility.VisualTooltipDataItem[] = [{ displayName: "类目", value: point.category }];
         if (point.actual !== null) {
             items.push({
                 displayName: options.actualName,
-                value: point.actualTooltipValue ?? this.formatRawNumber(point.actual, options.settings.decimalPlaces)
+                value: point.actualTooltipValue ?? this.formatRawNumber(point.actual, options.settings.decimalPlaces, options.locale)
             });
         }
         if (point.comparison !== null) {
             items.push({
-                displayName: options.comparisonName || "Comparison",
-                value: point.comparisonTooltipValue ?? this.formatRawNumber(point.comparison, options.settings.decimalPlaces)
+                displayName: options.comparisonName || "对比值",
+                value: point.comparisonTooltipValue ?? this.formatRawNumber(point.comparison, options.settings.decimalPlaces, options.locale)
             });
         }
         if (point.absoluteVariance !== null) {
-            items.push({ displayName: "Absolute variance", value: this.formatSigned(point.absoluteVariance, options.settings.decimalPlaces) });
+            items.push({
+                displayName: "绝对差异",
+                value: this.formatSigned(point.absoluteVariance, options.settings.decimalPlaces, options.locale, point.actualFormat)
+            });
         }
         if (point.relativeVariance !== null) {
-            items.push({ displayName: "Relative variance", value: this.formatPercent(point.relativeVariance, options.settings.decimalPlaces) });
+            items.push({ displayName: "相对差异", value: this.formatPercent(point.relativeVariance, options.settings.decimalPlaces, options.locale) });
         }
         point.tooltipItems?.forEach(item => items.push(item));
         this.tooltipService.show({
@@ -818,6 +947,13 @@ export class IBCSRenderer {
         return isFavorable(value, settings.invertVarianceColors) ? settings.positiveColor : settings.negativeColor;
     }
 
+    private renderedValue(point: RendererDataPoint, key: keyof VariancePoint): number | null {
+        if (point.highlightsActive) {
+            return point.highlight?.[key] as number | null ?? null;
+        }
+        return point[key] as number | null;
+    }
+
     private panelRange(box: PanelBox, showLabels: boolean, fontSize: number): [number, number] {
         const desiredPadding = showLabels ? fontSize + 7 : 8;
         const padding = Math.min(desiredPadding, Math.max(5, box.height * 0.24));
@@ -835,28 +971,31 @@ export class IBCSRenderer {
         return value => rangeMin + ((value - min) / span) * (rangeMax - rangeMin);
     }
 
-    private formatNumber(value: number, decimals: number): string {
+    private formatNumber(value: number, decimals: number, locale: string, format?: string): string {
         const scaled = value / this.displayUnit.divisor;
-        return `${new Intl.NumberFormat(undefined, {
+        const formatted = format
+            ? valueFormatter.format(scaled, format, true, locale)
+            : new Intl.NumberFormat(locale, {
             maximumFractionDigits: decimals,
             minimumFractionDigits: decimals
-        }).format(scaled)}${this.displayUnit.suffix}`;
+        }).format(scaled);
+        return `${formatted}${this.displayUnit.suffix}`;
     }
 
-    private formatRawNumber(value: number, decimals: number): string {
-        return new Intl.NumberFormat(undefined, {
+    private formatRawNumber(value: number, decimals: number, locale: string): string {
+        return new Intl.NumberFormat(locale, {
             maximumFractionDigits: decimals,
             minimumFractionDigits: decimals
         }).format(value);
     }
 
-    private formatSigned(value: number, decimals: number): string {
-        const formatted = this.formatNumber(value, decimals);
+    private formatSigned(value: number, decimals: number, locale: string, format?: string): string {
+        const formatted = this.formatNumber(value, decimals, locale, format);
         return value > 0 ? `+${formatted}` : formatted;
     }
 
-    private formatPercent(value: number, decimals: number): string {
-        const formatted = new Intl.NumberFormat(undefined, {
+    private formatPercent(value: number, decimals: number, locale: string): string {
+        const formatted = new Intl.NumberFormat(locale, {
             style: "percent",
             maximumFractionDigits: decimals,
             minimumFractionDigits: decimals
@@ -893,10 +1032,10 @@ export class IBCSRenderer {
     private ariaLabel(point: RendererDataPoint, options: RenderOptions): string {
         const parts = [point.category];
         if (point.actual !== null) {
-            parts.push(`${options.actualName}: ${this.formatNumber(point.actual, options.settings.decimalPlaces)}`);
+            parts.push(`${options.actualName}: ${this.formatNumber(point.actual, options.settings.decimalPlaces, options.locale, point.actualFormat)}`);
         }
         if (point.absoluteVariance !== null) {
-            parts.push(`variance: ${this.formatSigned(point.absoluteVariance, options.settings.decimalPlaces)}`);
+            parts.push(`variance: ${this.formatSigned(point.absoluteVariance, options.settings.decimalPlaces, options.locale, point.actualFormat)}`);
         }
         return parts.join(", ");
     }

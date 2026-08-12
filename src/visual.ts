@@ -15,7 +15,19 @@ import ISelectionId = powerbi.visuals.ISelectionId;
 import DataView = powerbi.DataView;
 import DataViewValueColumn = powerbi.DataViewValueColumn;
 
-import { appendGrandTotal, buildVariancePoint, DisplayUnitsMode, LayoutMode, resolveLayout, resolveScenarioLabel } from "./model";
+import {
+    aggregateVariancePoints,
+    appendGrandTotal,
+    buildHighlightVariancePoint,
+    buildVariancePoint,
+    DisplayUnitsMode,
+    LayoutMode,
+    resolveLayout,
+    resolveScenarioLabel,
+    resolveTopNSelection,
+    TopNMode,
+    TopNRankBy
+} from "./model";
 import { IBCSRenderer, RendererDataPoint, RenderSettings } from "./renderer";
 import { VisualFormattingSettingsModel } from "./settings";
 
@@ -38,6 +50,9 @@ export class Visual implements IVisual {
             },
             clear: () => {
                 this.selectionManager.clear().then(() => this.renderer.updateSelection([]));
+            },
+            contextMenu: (selectionId, position) => {
+                this.selectionManager.showContextMenu(selectionId, position);
             }
         });
     }
@@ -72,6 +87,7 @@ export class Visual implements IVisual {
                 responsive: layoutValue === "responsive",
                 actualName: converted.actualName,
                 comparisonName: converted.comparisonName,
+                hasComparison: converted.hasComparison,
                 actualLabel: this.formattingSettings.scenarioLabels.actualLabel.value.trim() || "AC",
                 comparisonLabel: resolveScenarioLabel(
                     converted.comparisonName,
@@ -79,7 +95,9 @@ export class Visual implements IVisual {
                 ),
                 title: this.resolveTitle(converted.actualName, converted.comparisonName),
                 settings: this.readSettings(),
-                selectedIds: this.selectionManager.getSelectionIds() as ISelectionId[]
+                selectedIds: this.selectionManager.getSelectionIds() as ISelectionId[],
+                locale: this.host.locale,
+                theme: this.readTheme()
             });
 
             this.events.renderingFinished(options);
@@ -119,7 +137,18 @@ export class Visual implements IVisual {
             overlapActualPercent: this.formattingSettings.columnDesign.overlapActualPercent.value,
             overlapComparisonPercent: this.formattingSettings.columnDesign.overlapComparisonPercent.value,
             integratedActualPercent: this.formattingSettings.columnDesign.integratedActualPercent.value,
-            integratedVariancePercent: this.formattingSettings.columnDesign.integratedVariancePercent.value
+            integratedVariancePercent: this.formattingSettings.columnDesign.integratedVariancePercent.value,
+            variancePanelPercent: this.formattingSettings.columnDesign.variancePanelPercent.value
+        };
+    }
+
+    private readTheme(): { highContrast: boolean; foreground: string; background: string; selected: string } {
+        const palette = this.host.colorPalette;
+        return {
+            highContrast: palette.isHighContrast,
+            foreground: palette.foreground.value,
+            background: palette.background.value,
+            selected: palette.foregroundSelected.value
         };
     }
 
@@ -134,7 +163,7 @@ export class Visual implements IVisual {
         const actualColumn = categorical?.values?.find(column => Boolean(column.source.roles?.actual));
         const comparisonColumn = categorical?.values?.find(column => Boolean(column.source.roles?.comparison));
         const tooltipColumns = categorical?.values?.filter(column => Boolean(column.source.roles?.Tooltips)) ?? [];
-        const actualName = actualColumn?.source.displayName ?? "Actual";
+        const actualName = actualColumn?.source.displayName ?? "实际值";
         const comparisonName = comparisonColumn?.source.displayName ?? "";
 
         if (!actualColumn && !comparisonColumn) {
@@ -148,6 +177,7 @@ export class Visual implements IVisual {
         );
         const points: RendererDataPoint[] = [];
         const treatNullsAsZeros = this.formattingSettings.chartSettings.treatNullsAsZeros.value;
+        const highlightsActive = Boolean(actualColumn?.highlights || comparisonColumn?.highlights);
 
         for (let index = 0; index < rowCount; index += 1) {
             const raw = buildVariancePoint({
@@ -159,15 +189,24 @@ export class Visual implements IVisual {
             if (!raw) {
                 continue;
             }
+            const highlight = buildHighlightVariancePoint({
+                category: raw.category,
+                actual: this.numericHighlightValue(actualColumn, index),
+                comparison: this.numericHighlightValue(comparisonColumn, index)
+            }, highlightsActive);
 
             const selectionId = categoryColumn
                 ? this.host.createSelectionIdBuilder().withCategory(categoryColumn, index).createSelectionId()
                 : undefined;
             points.push({
                 ...raw,
+                highlight: highlight.point,
+                highlightsActive: highlight.hasHighlight,
                 selectionId,
                 actualTooltipValue: this.formattedColumnValue(actualColumn, index),
                 comparisonTooltipValue: this.formattedColumnValue(comparisonColumn, index),
+                actualFormat: actualColumn?.source.format,
+                comparisonFormat: comparisonColumn?.source.format,
                 tooltipItems: tooltipColumns.flatMap(column => {
                     const formatted = this.formattedColumnValue(column, index);
                     return formatted === null ? [] : [{ displayName: column.source.displayName, value: formatted }];
@@ -175,10 +214,56 @@ export class Visual implements IVisual {
             });
         }
 
+        const allPoints = [...points];
+        const topNMode = String(this.formattingSettings.topN.mode.value.value) as TopNMode;
+        if (topNMode !== "off") {
+            const selection = resolveTopNSelection(
+                allPoints,
+                topNMode,
+                this.formattingSettings.topN.count.value,
+                String(this.formattingSettings.topN.rankBy.value.value) as TopNRankBy
+            );
+            const filteredPoints = selection.includedIndexes.map(index => allPoints[index]);
+            if (this.formattingSettings.topN.includeOthers.value && selection.excludedIndexes.length > 0) {
+                const excludedPoints = selection.excludedIndexes.map(index => allPoints[index]);
+                const other = aggregateVariancePoints(excludedPoints, "其他");
+                const highlightedOther = aggregateVariancePoints(
+                    excludedPoints
+                        .map(point => point.highlight)
+                        .filter((point): point is NonNullable<typeof point> => point !== null && point !== undefined),
+                    "其他"
+                );
+                if (other) {
+                    filteredPoints.push({
+                        ...other,
+                        highlight: highlightsActive ? highlightedOther : undefined,
+                        highlightsActive,
+                        actualFormat: actualColumn?.source.format,
+                        comparisonFormat: comparisonColumn?.source.format
+                    });
+                }
+            }
+            points.splice(0, points.length, ...filteredPoints);
+        }
+
         if (this.formattingSettings.chartSettings.grandTotal.value) {
-            const withTotal = appendGrandTotal(points);
-            if (withTotal.length > points.length) {
-                points.push({ ...withTotal[withTotal.length - 1], selectionId: undefined });
+            const withTotal = appendGrandTotal(allPoints, "总计");
+            if (withTotal.length > allPoints.length) {
+                const highlightedPoints = allPoints
+                    .map(point => point.highlight)
+                    .filter((point): point is NonNullable<typeof point> => point !== null && point !== undefined);
+                const highlightedWithTotal = appendGrandTotal(highlightedPoints, "总计");
+                const highlightTotal = highlightedWithTotal.length > highlightedPoints.length
+                    ? highlightedWithTotal[highlightedWithTotal.length - 1]
+                    : null;
+                points.push({
+                    ...withTotal[withTotal.length - 1],
+                    highlight: highlightsActive ? highlightTotal : undefined,
+                    highlightsActive,
+                    selectionId: undefined,
+                    actualFormat: actualColumn?.source.format,
+                    comparisonFormat: comparisonColumn?.source.format
+                });
             }
         }
 
@@ -192,6 +277,11 @@ export class Visual implements IVisual {
 
     private numericValue(column: DataViewValueColumn | undefined, index: number): number | null {
         const value = column?.values[index];
+        return typeof value === "number" && Number.isFinite(value) ? value : null;
+    }
+
+    private numericHighlightValue(column: DataViewValueColumn | undefined, index: number): number | null {
+        const value = column?.highlights?.[index];
         return typeof value === "number" && Number.isFinite(value) ? value : null;
     }
 

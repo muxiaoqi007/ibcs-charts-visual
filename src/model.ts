@@ -11,6 +11,8 @@ export type LayoutMode =
 export type ResolvedLayout = Exclude<LayoutMode, "responsive"> | "actualAbsoluteRelative";
 
 export type DisplayUnitsMode = "auto" | "none" | "thousands" | "millions" | "billions" | "trillions";
+export type TopNMode = "off" | "top" | "bottom" | "topBottom";
+export type TopNRankBy = "actual" | "absoluteVariance";
 
 export interface DisplayUnit {
     divisor: number;
@@ -22,6 +24,7 @@ export interface ColumnWidthSettings {
     overlapComparisonPercent: number;
     integratedActualPercent: number;
     integratedVariancePercent: number;
+    variancePanelPercent: number;
 }
 
 export interface ColumnWidths {
@@ -29,6 +32,12 @@ export interface ColumnWidths {
     overlapComparison: number;
     integratedActual: number;
     integratedVariance: number;
+    variancePanel: number;
+}
+
+export interface TopNSelection {
+    includedIndexes: number[];
+    excludedIndexes: number[];
 }
 
 export interface IntegratedVarianceGeometry {
@@ -48,6 +57,11 @@ export interface VariancePoint {
     comparison: number | null;
     absoluteVariance: number | null;
     relativeVariance: number | null;
+}
+
+export interface HighlightVariancePoint {
+    hasHighlight: boolean;
+    point: VariancePoint | null;
 }
 
 function finiteNumber(value: number | null | undefined): number | null {
@@ -85,6 +99,16 @@ export function isFavorable(value: number, invertVarianceColors: boolean): boole
     return invertVarianceColors ? value < 0 : value >= 0;
 }
 
+export function buildHighlightVariancePoint(point: RawVariancePoint, highlightsActive: boolean): HighlightVariancePoint {
+    if (!highlightsActive) {
+        return { hasHighlight: false, point: null };
+    }
+    return {
+        hasHighlight: true,
+        point: buildVariancePoint(point, false)
+    };
+}
+
 export function resolveScenarioLabel(displayName: string, configuredLabel: string): string {
     const configured = configuredLabel.trim();
     if (configured) {
@@ -92,13 +116,13 @@ export function resolveScenarioLabel(displayName: string, configuredLabel: strin
     }
 
     const normalized = displayName.trim().toLowerCase();
-    if (/\b(forecast|fc|estimate|outlook)\b/.test(normalized)) {
+    if (/\b(forecast|fc|estimate|outlook)\b/.test(normalized) || /(预测|预估|展望)/.test(normalized)) {
         return "FC";
     }
-    if (/\b(plan|pl|budget|bud|target)\b/.test(normalized)) {
+    if (/\b(plan|pl|budget|bud|target)\b/.test(normalized) || /(计划|预算|目标)/.test(normalized)) {
         return "PL";
     }
-    if (/\b(previous|prior|py|last\s+year|ly)\b/.test(normalized)) {
+    if (/\b(previous|prior|py|last\s+year|ly)\b/.test(normalized) || /(去年|上年|同期|前期)/.test(normalized)) {
         return "PY";
     }
 
@@ -110,6 +134,10 @@ export function resolveScenarioLabel(displayName: string, configuredLabel: strin
         .join("")
         .toUpperCase();
     return initials.slice(0, 3) || "PY";
+}
+
+export function resolveActualPanelLabel(actualLabel: string, comparisonLabel: string, hasComparison: boolean): string {
+    return hasComparison ? `${comparisonLabel}\n${actualLabel}` : actualLabel;
 }
 
 export function resolveColumnWidths(step: number, settings: ColumnWidthSettings): ColumnWidths {
@@ -124,19 +152,77 @@ export function resolveColumnWidths(step: number, settings: ColumnWidthSettings)
     );
     const integratedActual = Math.min(240, Math.max(8, safeStep * percent(settings.integratedActualPercent, 0.80)));
     const variance = integratedActual * percent(settings.integratedVariancePercent, 0.70);
+    const variancePanel = Math.min(120, Math.max(3, safeStep * percent(settings.variancePanelPercent, 0.30)));
 
     return {
         overlapActual: actual,
         overlapComparison: comparison,
         integratedActual,
-        integratedVariance: variance
+        integratedVariance: variance,
+        variancePanel
     };
 }
 
-export function resolveIntegratedVarianceGeometry(actualY: number, comparisonY: number): IntegratedVarianceGeometry {
+export function resolveTopNSelection(
+    points: VariancePoint[],
+    mode: TopNMode,
+    count: number,
+    rankBy: TopNRankBy
+): TopNSelection {
+    const safeCount = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
+    if (mode === "off" || points.length <= safeCount) {
+        return { includedIndexes: points.map((_, index) => index), excludedIndexes: [] };
+    }
+
+    const ranked = points.map((point, index) => ({
+        index,
+        score: Math.abs(rankBy === "absoluteVariance" ? (point.absoluteVariance ?? 0) : (point.actual ?? 0))
+    }));
+    const selected = new Set<number>();
+    if (mode === "top" || mode === "bottom") {
+        ranked.sort((left, right) => mode === "top" ? right.score - left.score : left.score - right.score);
+        ranked.slice(0, safeCount).forEach(item => selected.add(item.index));
+    } else {
+        const topCount = Math.ceil(safeCount / 2);
+        const bottomCount = Math.floor(safeCount / 2);
+        [...ranked].sort((left, right) => right.score - left.score)
+            .slice(0, topCount)
+            .forEach(item => selected.add(item.index));
+        [...ranked].sort((left, right) => left.score - right.score)
+            .filter(item => !selected.has(item.index))
+            .slice(0, bottomCount)
+            .forEach(item => selected.add(item.index));
+    }
+
     return {
-        top: Math.min(actualY, comparisonY),
-        height: Math.max(3, Math.abs(actualY - comparisonY))
+        includedIndexes: points.map((_, index) => index).filter(index => selected.has(index)),
+        excludedIndexes: points.map((_, index) => index).filter(index => !selected.has(index))
+    };
+}
+
+export function aggregateVariancePoints(points: VariancePoint[], category: string): VariancePoint | null {
+    if (points.length === 0) {
+        return null;
+    }
+    const actualValues = points.map(point => point.actual).filter((value): value is number => value !== null);
+    const comparisonValues = points.map(point => point.comparison).filter((value): value is number => value !== null);
+    return buildVariancePoint({
+        category,
+        actual: actualValues.length > 0 ? actualValues.reduce((sum, value) => sum + value, 0) : null,
+        comparison: comparisonValues.length > 0 ? comparisonValues.reduce((sum, value) => sum + value, 0) : null
+    }, false);
+}
+
+export function resolveIntegratedVarianceGeometry(actualY: number, comparisonY: number): IntegratedVarianceGeometry {
+    const delta = actualY - comparisonY;
+    if (delta === 0) {
+        return { top: actualY, height: 0 };
+    }
+
+    const height = Math.max(3, Math.abs(delta));
+    return {
+        top: delta > 0 ? comparisonY : actualY - Math.max(0, height - Math.abs(delta)),
+        height
     };
 }
 
@@ -177,17 +263,11 @@ export function resolveLayout(
     return "integratedVariance";
 }
 
-export function appendGrandTotal(points: VariancePoint[]): VariancePoint[] {
+export function appendGrandTotal(points: VariancePoint[], label = "Total"): VariancePoint[] {
     if (points.length === 0) {
         return points;
     }
-    const actualValues = points.map(point => point.actual).filter((value): value is number => value !== null);
-    const comparisonValues = points.map(point => point.comparison).filter((value): value is number => value !== null);
-    const total = buildVariancePoint({
-        category: "Total",
-        actual: actualValues.length > 0 ? actualValues.reduce((sum, value) => sum + value, 0) : null,
-        comparison: comparisonValues.length > 0 ? comparisonValues.reduce((sum, value) => sum + value, 0) : null
-    }, false);
+    const total = aggregateVariancePoints(points, label);
     return total ? [...points, total] : points;
 }
 

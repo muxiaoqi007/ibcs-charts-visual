@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
     appendGrandTotal,
+    aggregateVariancePoints,
+    buildHighlightVariancePoint,
     buildVariancePoint,
     canShowIntegratedVarianceLabel,
     isFavorable,
     resolveColumnWidths,
+    resolveActualPanelLabel,
     resolveDisplayUnit,
     resolveIntegratedVarianceGeometry,
     resolveLayout,
-    resolveScenarioLabel
+    resolveScenarioLabel,
+    resolveTopNSelection
 } from "../src/model";
 
 describe("buildVariancePoint", () => {
@@ -86,16 +90,38 @@ describe("display units", () => {
     });
 });
 
+describe("cross-highlight values", () => {
+    it("distinguishes an inactive highlight query from a non-highlighted row", () => {
+        expect(buildHighlightVariancePoint({ category: "A", actual: 20, comparison: 10 }, false))
+            .toEqual({ hasHighlight: false, point: null });
+        expect(buildHighlightVariancePoint({ category: "A", actual: null, comparison: null }, true))
+            .toEqual({ hasHighlight: true, point: null });
+    });
+
+    it("computes variances for highlighted values", () => {
+        expect(buildHighlightVariancePoint({ category: "A", actual: 15, comparison: 10 }, true).point)
+            .toMatchObject({ actual: 15, comparison: 10, absoluteVariance: 5, relativeVariance: 0.5 });
+    });
+});
+
 describe("scenario labels", () => {
     it("detects common comparison scenarios", () => {
         expect(resolveScenarioLabel("Previous year", "")).toBe("PY");
         expect(resolveScenarioLabel("Operating Plan", "")).toBe("PL");
         expect(resolveScenarioLabel("Rolling Forecast", "")).toBe("FC");
+        expect(resolveScenarioLabel("上年同期", "")).toBe("PY");
+        expect(resolveScenarioLabel("年度预算", "")).toBe("PL");
+        expect(resolveScenarioLabel("滚动预测", "")).toBe("FC");
     });
 
     it("prefers the configured label and derives a fallback abbreviation", () => {
         expect(resolveScenarioLabel("Previous year", "LY")).toBe("LY");
         expect(resolveScenarioLabel("Reference Scenario", "")).toBe("RS");
+    });
+
+    it("omits the comparison scenario when only Actual is present", () => {
+        expect(resolveActualPanelLabel("AC", "PY", false)).toBe("AC");
+        expect(resolveActualPanelLabel("AC", "PL", true)).toBe("PL\nAC");
     });
 });
 
@@ -105,12 +131,14 @@ describe("column widths", () => {
             overlapActualPercent: 23,
             overlapComparisonPercent: 30,
             integratedActualPercent: 80,
-            integratedVariancePercent: 70
+            integratedVariancePercent: 70,
+            variancePanelPercent: 30
         })).toEqual({
             overlapActual: 62.1,
             overlapComparison: 81,
             integratedActual: 216,
-            integratedVariance: 151.2
+            integratedVariance: 151.2,
+            variancePanel: 81
         });
     });
 
@@ -119,18 +147,51 @@ describe("column widths", () => {
             overlapActualPercent: 80,
             overlapComparisonPercent: 20,
             integratedActualPercent: 80,
-            integratedVariancePercent: 70
+            integratedVariancePercent: 70,
+            variancePanelPercent: 30
         });
         expect(widths.overlapActual).toBe(20);
         expect(widths.overlapComparison).toBe(20);
     });
 });
 
+describe("Top N + 其他", () => {
+    const points = [
+        buildVariancePoint({ category: "甲", actual: 100, comparison: 90 }, false),
+        buildVariancePoint({ category: "乙", actual: 20, comparison: 40 }, false),
+        buildVariancePoint({ category: "丙", actual: 60, comparison: 55 }, false),
+        buildVariancePoint({ category: "丁", actual: 5, comparison: 5 }, false)
+    ].filter(point => point !== null);
+
+    it("按实际值选择前 N 项并保持原始顺序", () => {
+        expect(resolveTopNSelection(points, "top", 2, "actual"))
+            .toEqual({ includedIndexes: [0, 2], excludedIndexes: [1, 3] });
+    });
+
+    it("按绝对差异选择差异最大的项", () => {
+        expect(resolveTopNSelection(points, "top", 1, "absoluteVariance"))
+            .toEqual({ includedIndexes: [1], excludedIndexes: [0, 2, 3] });
+    });
+
+    it("汇总其他项后重新计算差异", () => {
+        expect(aggregateVariancePoints([points[1], points[3]], "其他"))
+            .toMatchObject({ category: "其他", actual: 25, comparison: 45, absoluteVariance: -20 });
+    });
+});
+
 describe("integrated variance geometry", () => {
+    it("does not draw a variance block for an exact zero variance", () => {
+        expect(resolveIntegratedVarianceGeometry(100, 100)).toEqual({ top: 100, height: 0 });
+    });
+
     it("keeps a tiny variance visible without showing a colliding label", () => {
         const geometry = resolveIntegratedVarianceGeometry(100, 99.5);
         expect(geometry).toEqual({ top: 99.5, height: 3 });
         expect(canShowIntegratedVarianceLabel(120, geometry.height, 12)).toBe(false);
+    });
+
+    it("extends a tiny negative screen-space delta in its actual direction", () => {
+        expect(resolveIntegratedVarianceGeometry(99.5, 100)).toEqual({ top: 97, height: 3 });
     });
 
     it("shows a variance label only when width and height both fit", () => {

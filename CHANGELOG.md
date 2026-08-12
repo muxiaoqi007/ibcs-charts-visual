@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.5.0.0 — 2026-08-12
+
+- Added Top N, Bottom N, and Top/Bottom N filtering with optional “其他” aggregation.
+- Added an independent variance-column width control and reduced its default width to 30% of category spacing.
+- Localized every data role, formatting card, setting, and enumeration option into Chinese.
+- Kept grand totals based on the complete dataset when Top N filtering is active.
+
+## 1.4.0.0 — 2026-08-12
+
+- Added Power BI cross-highlight rendering with subdued full-value backgrounds and highlighted foreground values.
+- Added Power BI high-contrast palette support and theme-aware text, background, axes, labels, and focus colors.
+- Added host-locale number formatting and model format strings for Actual, Comparison, and absolute variance labels.
+- Added Power BI context menus on category marks.
+
+## 1.3.1.0 — 2026-08-12
+
+- Stopped rendering favorable variance marks for exact zero variances in every layout.
+- Removed the comparison scenario label from Actual-only charts.
+- Added Chinese Previous Year, Plan, and Forecast scenario-name recognition.
+- Removed the unsupported Power BI cross-highlight capability declaration until highlight rendering is implemented.
+
 ## 1.3.0.0 — 2026-08-11
 
 - Added automatic and configurable AC/PY/PL/FC scenario abbreviations.

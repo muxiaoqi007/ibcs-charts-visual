@@ -1,23 +1,23 @@
 {
   "dataRoles": [
     {
-      "displayName": "Category",
+      "displayName": "类目",
       "name": "category",
       "kind": "Grouping"
     },
     {
-      "displayName": "Actual",
+      "displayName": "实际值",
       "name": "actual",
       "kind": "Measure"
     },
     {
-      "displayName": "Previous year / Plan",
+      "displayName": "对比值（上年/计划）",
       "name": "comparison",
       "kind": "Measure"
     },
     {
-      "displayName": "Tooltips",
-      "description": "Additional measures shown when hovering over a category.",
+      "displayName": "工具提示",
+      "description": "鼠标悬停在类目上时显示的其他度量值。",
       "name": "Tooltips",
       "kind": "Measure"
     }
@@ -48,147 +48,184 @@
   ],
   "objects": {
     "chartSettings": {
-      "displayName": "Chart settings",
+      "displayName": "图表设置",
       "properties": {
         "layout": {
-          "displayName": "Layout",
+          "displayName": "布局",
           "type": {
             "enumeration": [
-              { "displayName": "Responsive", "value": "responsive" },
-              { "displayName": "Integrated variance", "value": "integratedVariance" },
-              { "displayName": "Absolute variance", "value": "absolute" },
-              { "displayName": "Relative variance", "value": "relative" },
-              { "displayName": "Absolute / Relative", "value": "absoluteRelative" },
-              { "displayName": "Actual / Absolute", "value": "actualAbsolute" },
-              { "displayName": "Actual / Relative", "value": "actualRelative" },
-              { "displayName": "Actual", "value": "actual" }
+              { "displayName": "响应式", "value": "responsive" },
+              { "displayName": "集成差异", "value": "integratedVariance" },
+              { "displayName": "绝对差异", "value": "absolute" },
+              { "displayName": "相对差异", "value": "relative" },
+              { "displayName": "绝对差异 / 相对差异", "value": "absoluteRelative" },
+              { "displayName": "实际值 / 绝对差异", "value": "actualAbsolute" },
+              { "displayName": "实际值 / 相对差异", "value": "actualRelative" },
+              { "displayName": "实际值", "value": "actual" }
             ]
           }
         },
         "invertVarianceColors": {
-          "displayName": "Invert variance colors",
+          "displayName": "反转差异颜色",
           "type": { "bool": true }
         },
         "treatNullsAsZeros": {
-          "displayName": "Treat nulls as zeros",
+          "displayName": "将空值视为零",
           "type": { "bool": true }
         },
         "grandTotal": {
-          "displayName": "Grand total",
+          "displayName": "显示总计",
           "type": { "bool": true }
         },
         "showVerticalAxis": {
-          "displayName": "Show vertical axis",
+          "displayName": "显示纵轴",
           "type": { "bool": true }
         }
       }
     },
     "colors": {
-      "displayName": "Colors",
+      "displayName": "颜色",
       "properties": {
         "actualColor": {
-          "displayName": "Actual",
+          "displayName": "实际值",
           "type": { "fill": { "solid": { "color": true } } }
         },
         "comparisonColor": {
-          "displayName": "Previous year / Plan",
+          "displayName": "对比值（上年/计划）",
           "type": { "fill": { "solid": { "color": true } } }
         },
         "positiveColor": {
-          "displayName": "Favorable variance",
+          "displayName": "有利差异",
           "type": { "fill": { "solid": { "color": true } } }
         },
         "negativeColor": {
-          "displayName": "Unfavorable variance",
+          "displayName": "不利差异",
           "type": { "fill": { "solid": { "color": true } } }
         },
         "baselineColor": {
-          "displayName": "Baseline",
+          "displayName": "基准线",
           "type": { "fill": { "solid": { "color": true } } }
         }
       }
     },
     "scenarioLabels": {
-      "displayName": "Scenario labels",
+      "displayName": "场景标签",
       "properties": {
         "actualLabel": {
-          "displayName": "Actual label",
+          "displayName": "实际值缩写",
           "type": { "text": true }
         },
         "comparisonLabel": {
-          "displayName": "Comparison label",
+          "displayName": "对比值缩写",
           "type": { "text": true }
         }
       }
     },
     "columnDesign": {
-      "displayName": "Column design",
+      "displayName": "柱形设计",
       "properties": {
         "overlapActualPercent": {
-          "displayName": "Overlap actual width %",
+          "displayName": "重叠实际柱宽度 (%)",
           "type": { "numeric": true }
         },
         "overlapComparisonPercent": {
-          "displayName": "Overlap comparison width %",
+          "displayName": "重叠对比柱宽度 (%)",
           "type": { "numeric": true }
         },
         "integratedActualPercent": {
-          "displayName": "Integrated actual width %",
+          "displayName": "集成实际柱宽度 (%)",
           "type": { "numeric": true }
         },
         "integratedVariancePercent": {
-          "displayName": "Integrated variance width %",
+          "displayName": "集成差异块宽度 (%)",
+          "type": { "numeric": true }
+        },
+        "variancePanelPercent": {
+          "displayName": "独立差异柱宽度 (%)",
           "type": { "numeric": true }
         }
       }
     },
+    "topN": {
+      "displayName": "前 N 项与其他",
+      "properties": {
+        "mode": {
+          "displayName": "筛选方式",
+          "type": {
+            "enumeration": [
+              { "displayName": "关闭", "value": "off" },
+              { "displayName": "前 N 项", "value": "top" },
+              { "displayName": "后 N 项", "value": "bottom" },
+              { "displayName": "前后 N 项", "value": "topBottom" }
+            ]
+          }
+        },
+        "count": {
+          "displayName": "保留项数",
+          "type": { "integer": true }
+        },
+        "rankBy": {
+          "displayName": "排序依据",
+          "type": {
+            "enumeration": [
+              { "displayName": "实际值", "value": "actual" },
+              { "displayName": "绝对差异", "value": "absoluteVariance" }
+            ]
+          }
+        },
+        "includeOthers": {
+          "displayName": "汇总为“其他”",
+          "type": { "bool": true }
+        }
+      }
+    },
     "dataLabels": {
-      "displayName": "Data labels",
+      "displayName": "数据标签",
       "properties": {
         "show": {
-          "displayName": "Show",
+          "displayName": "显示数据标签",
           "type": { "bool": true }
         },
         "fontSize": {
-          "displayName": "Value text size",
+          "displayName": "数值字号",
           "type": { "formatting": { "fontSize": true } }
         },
         "categoryFontSize": {
-          "displayName": "Category text size",
+          "displayName": "类目字号",
           "type": { "formatting": { "fontSize": true } }
         },
         "decimalPlaces": {
-          "displayName": "Decimal places",
+          "displayName": "小数位数",
           "type": { "integer": true }
         },
         "displayUnits": {
-          "displayName": "Display units",
+          "displayName": "显示单位",
           "type": {
             "enumeration": [
-              { "displayName": "Auto", "value": "auto" },
-              { "displayName": "None", "value": "none" },
-              { "displayName": "Thousands", "value": "thousands" },
-              { "displayName": "Millions", "value": "millions" },
-              { "displayName": "Billions", "value": "billions" },
-              { "displayName": "Trillions", "value": "trillions" }
+              { "displayName": "自动", "value": "auto" },
+              { "displayName": "无", "value": "none" },
+              { "displayName": "千 (K)", "value": "thousands" },
+              { "displayName": "百万 (M)", "value": "millions" },
+              { "displayName": "十亿 (B)", "value": "billions" },
+              { "displayName": "万亿 (T)", "value": "trillions" }
             ]
           }
         }
       }
     },
     "title": {
-      "displayName": "Title",
+      "displayName": "标题",
       "properties": {
         "show": {
-          "displayName": "Show",
+          "displayName": "显示标题",
           "type": { "bool": true }
         },
         "text": {
-          "displayName": "Text",
+          "displayName": "标题文本",
           "type": { "text": true }
         },
         "fontSize": {
-          "displayName": "Text size",
+          "displayName": "标题字号",
           "type": { "formatting": { "fontSize": true } }
         }
       }
