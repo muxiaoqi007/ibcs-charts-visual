@@ -102,7 +102,10 @@ export class Visual implements IVisual {
 
             this.events.renderingFinished(options);
         } catch (error) {
-            this.events.renderingFailed(options, error instanceof Error ? error.message : String(error));
+            const message = error instanceof Error ? error.message : String(error);
+            console.error("IBCS Charts render failed", error);
+            this.renderer.showError(message, options.viewport.width, options.viewport.height);
+            this.events.renderingFailed(options, message);
         }
     }
 
@@ -119,26 +122,28 @@ export class Visual implements IVisual {
     }
 
     private readSettings(): RenderSettings {
+        // Persisted or cleared formatting values can be blank; fall back so layout math never becomes NaN.
+        const num = (value: number, fallback: number): number => typeof value === "number" && Number.isFinite(value) ? value : fallback;
         return {
             invertVarianceColors: this.formattingSettings.chartSettings.invertVarianceColors.value,
             showVerticalAxis: this.formattingSettings.chartSettings.showVerticalAxis.value,
             showDataLabels: this.formattingSettings.dataLabels.show.value,
             showTitle: this.formattingSettings.title.show.value,
-            valueFontSize: this.formattingSettings.dataLabels.fontSize.value,
-            categoryFontSize: this.formattingSettings.dataLabels.categoryFontSize.value,
-            titleFontSize: this.formattingSettings.title.fontSize.value,
-            decimalPlaces: Math.max(0, Math.min(4, Math.round(this.formattingSettings.dataLabels.decimalPlaces.value))),
+            valueFontSize: num(this.formattingSettings.dataLabels.fontSize.value, 12),
+            categoryFontSize: num(this.formattingSettings.dataLabels.categoryFontSize.value, 11),
+            titleFontSize: num(this.formattingSettings.title.fontSize.value, 14),
+            decimalPlaces: Math.max(0, Math.min(4, Math.round(num(this.formattingSettings.dataLabels.decimalPlaces.value, 1)))),
             displayUnits: String(this.formattingSettings.dataLabels.displayUnits.value.value) as DisplayUnitsMode,
             actualColor: this.formattingSettings.colors.actualColor.value.value,
             comparisonColor: this.formattingSettings.colors.comparisonColor.value.value,
             positiveColor: this.formattingSettings.colors.positiveColor.value.value,
             negativeColor: this.formattingSettings.colors.negativeColor.value.value,
             baselineColor: this.formattingSettings.colors.baselineColor.value.value,
-            overlapActualPercent: this.formattingSettings.columnDesign.overlapActualPercent.value,
-            overlapComparisonPercent: this.formattingSettings.columnDesign.overlapComparisonPercent.value,
-            integratedActualPercent: this.formattingSettings.columnDesign.integratedActualPercent.value,
-            integratedVariancePercent: this.formattingSettings.columnDesign.integratedVariancePercent.value,
-            variancePanelPercent: this.formattingSettings.columnDesign.variancePanelPercent.value
+            overlapActualPercent: num(this.formattingSettings.columnDesign.overlapActualPercent.value, 23),
+            overlapComparisonPercent: num(this.formattingSettings.columnDesign.overlapComparisonPercent.value, 30),
+            integratedActualPercent: num(this.formattingSettings.columnDesign.integratedActualPercent.value, 80),
+            integratedVariancePercent: num(this.formattingSettings.columnDesign.integratedVariancePercent.value, 70),
+            variancePanelPercent: num(this.formattingSettings.columnDesign.variancePanelPercent.value, 30)
         };
     }
 
@@ -203,8 +208,6 @@ export class Visual implements IVisual {
                 highlight: highlight.point,
                 highlightsActive: highlight.hasHighlight,
                 selectionId,
-                actualTooltipValue: this.formattedColumnValue(actualColumn, index),
-                comparisonTooltipValue: this.formattedColumnValue(comparisonColumn, index),
                 actualFormat: actualColumn?.source.format,
                 comparisonFormat: comparisonColumn?.source.format,
                 tooltipItems: tooltipColumns.flatMap(column => {

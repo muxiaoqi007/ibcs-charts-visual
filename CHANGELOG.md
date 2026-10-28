@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.3.0 — 2026-10-28
+
+- Displayed rendering errors inside the visual instead of leaving an empty canvas.
+
+## 1.5.2.0 — 2026-09-04
+
+- Unified Actual, Comparison, and absolute-variance tooltip values under the visual's display-unit and decimal settings.
+- Kept relative variance on the same decimal setting and retained model formatting for additional tooltip measures.
+
+## 1.5.1.0 — 2026-09-04
+
+- Limited the terminal relative-variance arrow to an explicitly enabled grand-total category.
+- Prevented Top N “其他” and ordinary final categories from being styled as totals.
+- Preserved per-category integrated variance blocks when Responsive mode switches to its compact layout.
+
 ## 1.5.0.0 — 2026-08-12
 
 - Added Top N, Bottom N, and Top/Bottom N filtering with optional “其他” aggregation.

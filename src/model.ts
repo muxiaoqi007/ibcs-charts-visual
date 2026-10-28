@@ -19,6 +19,20 @@ export interface DisplayUnit {
     suffix: string;
 }
 
+export function formatDisplayNumber(
+    value: number,
+    unit: DisplayUnit,
+    decimals: number,
+    locale: string
+): string {
+    const safeDecimals = Number.isFinite(decimals) ? Math.max(0, Math.min(20, Math.floor(decimals))) : 0;
+    const formatted = new Intl.NumberFormat(locale, {
+        maximumFractionDigits: safeDecimals,
+        minimumFractionDigits: safeDecimals
+    }).format(value / unit.divisor);
+    return `${formatted}${unit.suffix}`;
+}
+
 export interface ColumnWidthSettings {
     overlapActualPercent: number;
     overlapComparisonPercent: number;
@@ -57,6 +71,7 @@ export interface VariancePoint {
     comparison: number | null;
     absoluteVariance: number | null;
     relativeVariance: number | null;
+    isGrandTotal?: boolean;
 }
 
 export interface HighlightVariancePoint {
@@ -268,7 +283,7 @@ export function appendGrandTotal(points: VariancePoint[], label = "Total"): Vari
         return points;
     }
     const total = aggregateVariancePoints(points, label);
-    return total ? [...points, total] : points;
+    return total ? [...points, { ...total, isGrandTotal: true }] : points;
 }
 
 export function resolveDisplayUnit(mode: DisplayUnitsMode, values: Array<number | null | undefined>): DisplayUnit {

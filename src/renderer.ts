@@ -8,6 +8,7 @@ import {
     DisplayUnit,
     DisplayUnitsMode,
     canShowIntegratedVarianceLabel,
+    formatDisplayNumber,
     isFavorable,
     ResolvedLayout,
     resolveActualPanelLabel,
@@ -38,8 +39,6 @@ export interface RendererDataPoint extends VariancePoint {
     highlight?: VariancePoint | null;
     highlightsActive?: boolean;
     selectionId?: ISelectionId;
-    actualTooltipValue?: string | null;
-    comparisonTooltipValue?: string | null;
     actualFormat?: string;
     comparisonFormat?: string;
     tooltipItems?: Array<{ displayName: string; value: string }>;
@@ -227,6 +226,15 @@ export class IBCSRenderer {
         });
     }
 
+    // Surfaces a rendering exception inside the visual instead of leaving a blank canvas.
+    public showError(message: string, width: number, height: number): void {
+        this.svg.replaceChildren();
+        this.svg.setAttribute("width", String(Math.max(0, width)));
+        this.svg.setAttribute("height", String(Math.max(0, height)));
+        this.svg.setAttribute("viewBox", `0 0 ${Math.max(1, width)} ${Math.max(1, height)}`);
+        this.drawMessage(`渲染出错：${message}`, width, height);
+    }
+
     private panelSpecs(layout: ResolvedLayout): PanelSpec[] {
         switch (layout) {
             case "actualAbsoluteRelative":
@@ -352,7 +360,7 @@ export class IBCSRenderer {
             }
             const absoluteVariance = this.renderedValue(point, "absoluteVariance");
             const relativeVariance = this.renderedValue(point, "relativeVariance");
-            if (index === options.points.length - 1
+            if (point.isGrandTotal === true
                 && absoluteVariance !== null
                 && absoluteVariance !== 0
                 && actual !== null
@@ -482,7 +490,7 @@ export class IBCSRenderer {
                     group.appendChild(varianceLabel);
                 }
 
-                if (index === options.points.length - 1 && relativeVariance !== null && step >= 48) {
+                if (point.isGrandTotal === true && relativeVariance !== null && step >= 48) {
                     this.drawIntegratedVarianceArrow(
                         group,
                         box.x + box.width + options.profile.marginRight - 4,
@@ -824,19 +832,19 @@ export class IBCSRenderer {
         if (point.actual !== null) {
             items.push({
                 displayName: options.actualName,
-                value: point.actualTooltipValue ?? this.formatRawNumber(point.actual, options.settings.decimalPlaces, options.locale)
+                value: this.formatNumber(point.actual, options.settings.decimalPlaces, options.locale)
             });
         }
         if (point.comparison !== null) {
             items.push({
                 displayName: options.comparisonName || "对比值",
-                value: point.comparisonTooltipValue ?? this.formatRawNumber(point.comparison, options.settings.decimalPlaces, options.locale)
+                value: this.formatNumber(point.comparison, options.settings.decimalPlaces, options.locale)
             });
         }
         if (point.absoluteVariance !== null) {
             items.push({
                 displayName: "绝对差异",
-                value: this.formatSigned(point.absoluteVariance, options.settings.decimalPlaces, options.locale, point.actualFormat)
+                value: this.formatSigned(point.absoluteVariance, options.settings.decimalPlaces, options.locale)
             });
         }
         if (point.relativeVariance !== null) {
@@ -973,20 +981,10 @@ export class IBCSRenderer {
 
     private formatNumber(value: number, decimals: number, locale: string, format?: string): string {
         const scaled = value / this.displayUnit.divisor;
-        const formatted = format
-            ? valueFormatter.format(scaled, format, true, locale)
-            : new Intl.NumberFormat(locale, {
-            maximumFractionDigits: decimals,
-            minimumFractionDigits: decimals
-        }).format(scaled);
-        return `${formatted}${this.displayUnit.suffix}`;
-    }
-
-    private formatRawNumber(value: number, decimals: number, locale: string): string {
-        return new Intl.NumberFormat(locale, {
-            maximumFractionDigits: decimals,
-            minimumFractionDigits: decimals
-        }).format(value);
+        if (format) {
+            return `${valueFormatter.format(scaled, format, true, locale)}${this.displayUnit.suffix}`;
+        }
+        return formatDisplayNumber(value, this.displayUnit, decimals, locale);
     }
 
     private formatSigned(value: number, decimals: number, locale: string, format?: string): string {

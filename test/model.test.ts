@@ -5,6 +5,7 @@ import {
     buildHighlightVariancePoint,
     buildVariancePoint,
     canShowIntegratedVarianceLabel,
+    formatDisplayNumber,
     isFavorable,
     resolveColumnWidths,
     resolveActualPanelLabel,
@@ -74,7 +75,14 @@ describe("grand total", () => {
             buildVariancePoint({ category: "B", actual: 30, comparison: 40 }, false)
         ].filter(point => point !== null);
         const result = appendGrandTotal(points);
-        expect(result.at(-1)).toMatchObject({ category: "Total", actual: 50, comparison: 50, absoluteVariance: 0 });
+        expect(result.at(-1)).toMatchObject({
+            category: "Total",
+            actual: 50,
+            comparison: 50,
+            absoluteVariance: 0,
+            isGrandTotal: true
+        });
+        expect(result[1].isGrandTotal).not.toBe(true);
     });
 });
 
@@ -101,6 +109,13 @@ describe("cross-highlight values", () => {
     it("computes variances for highlighted values", () => {
         expect(buildHighlightVariancePoint({ category: "A", actual: 15, comparison: 10 }, true).point)
             .toMatchObject({ actual: 15, comparison: 10, absoluteVariance: 5, relativeVariance: 0.5 });
+    });
+
+    it("formats tooltip values with one shared unit and decimal policy", () => {
+        const unit = { divisor: 1_000_000, suffix: "M" };
+        expect(formatDisplayNumber(324_251_398, unit, 2, "en-US")).toBe("324.25M");
+        expect(formatDisplayNumber(205_091_427, unit, 2, "en-US")).toBe("205.09M");
+        expect(formatDisplayNumber(119_159_971, unit, 2, "en-US")).toBe("119.16M");
     });
 });
 
